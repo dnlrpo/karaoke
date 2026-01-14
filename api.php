@@ -86,15 +86,41 @@ switch ($action) {
         $data = json_decode(file_get_contents('php://input'), true);
         $pin = $data['pin'] ?? '';
 
+        // Rate limiting for login
+        if (!isset($_SESSION['login_attempts'])) {
+            $_SESSION['login_attempts'] = 0;
+            $_SESSION['last_attempt_time'] = 0;
+        }
+
+        $currentTime = time();
+        $lockoutTime = 300; // 5 minutes lockout
+        $maxAttempts = 5;
+
+        if ($_SESSION['login_attempts'] >= $maxAttempts && ($currentTime - $_SESSION['last_attempt_time']) < $lockoutTime) {
+            $remaining = $lockoutTime - ($currentTime - $_SESSION['last_attempt_time']);
+            $response['message'] = "Demasiados intentos. Intente en " . ceil($remaining / 60) . " minutos.";
+            break;
+        }
+
         $stmt = $pdo->prepare("SELECT password_hash FROM admins WHERE username = 'staff'");
         $stmt->execute();
         $admin = $stmt->fetch();
 
         if ($admin && password_verify($pin, $admin['password_hash'])) {
+            session_regenerate_id(true);
             $_SESSION['admin_auth'] = true;
+            $_SESSION['login_attempts'] = 0; // Reset attempts on success
             $response = ['success' => true, 'message' => 'Acceso Staff Concedido'];
         } else {
-            $response['message'] = 'PIN Staff Incorrecto';
+            $_SESSION['login_attempts']++;
+            $_SESSION['last_attempt_time'] = $currentTime;
+            $remainingAttempts = $maxAttempts - $_SESSION['login_attempts'];
+            
+            if ($remainingAttempts <= 0) {
+                $response['message'] = 'PIN Incorrecto. Acceso bloqueado por 5 minutos.';
+            } else {
+                $response['message'] = "PIN Staff Incorrecto. Intentos restantes: $remainingAttempts";
+            }
         }
         break;
 

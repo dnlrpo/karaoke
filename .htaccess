@@ -1,0 +1,4 @@
+RewriteEngine On
+RewriteRule ^\.env$ - [F,L]
+RewriteRule ^\.git - [F,L]
+Options -Indexes

@@ -33,7 +33,9 @@ $options = [
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage());
+    // Log the error in a real environment
+    error_log("Database connection failed: " . $e->getMessage());
+    die("Database connection failed. Please contact the administrator.");
 }
 
 /**
