@@ -236,6 +236,28 @@ switch ($action) {
             $response = ['success' => true, 'message' => $message];
         }
         break;
+
+    case 'send_reaction':
+        $data = json_decode(file_get_contents('php://input'), true);
+        $emoji = trim($data['emoji'] ?? '');
+        if ($emoji) {
+            $stmt = $pdo->prepare("INSERT INTO reactions (emoji) VALUES (?)");
+            if ($stmt->execute([$emoji])) {
+                $response = ['success' => true];
+            }
+        }
+        break;
+
+    case 'get_reactions':
+        $since = (int)($_GET['since'] ?? 0);
+        // Solo traer reacciones de los últimos 30 segundos para evitar sobrecarga si el ID es muy viejo
+        $stmt = $pdo->prepare("SELECT id, emoji FROM reactions WHERE id > ? AND created_at >= NOW() - INTERVAL 30 SECOND ORDER BY id ASC");
+        $stmt->execute([$since]);
+        $response = [
+            'success' => true,
+            'reactions' => $stmt->fetchAll()
+        ];
+        break;
 }
 
 echo json_encode($response);

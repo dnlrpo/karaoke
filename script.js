@@ -4,18 +4,22 @@ let nightCode = "";
 let currentQueue = [];
 let registrationEnabled = true;
 let accessCodeValidated = false;
+let lastReactionId = 0;
 
 const form = document.getElementById('karaokeForm');
 const queueList = document.getElementById('queueList');
 const queueBadge = document.getElementById('queueBadge');
 const loginModal = document.getElementById('loginModal');
 const codeLabel = document.getElementById('currentCodeLabel');
+const reactionPanel = document.getElementById('reactionPanel');
 
 // Initial Load
 async function init() {
     await fetchQueue();
     // Polling for updates
     setInterval(fetchQueue, 5000);
+    // Polling for reactions faster
+    setInterval(fetchReactions, 2000);
 }
 
 async function fetchQueue() {
@@ -41,6 +45,60 @@ async function fetchQueue() {
     }
 }
 
+async function fetchReactions() {
+    try {
+        const response = await fetch(`api.php?action=get_reactions&since=${lastReactionId}`);
+        const data = await response.json();
+        if (data.success && data.reactions.length > 0) {
+            data.reactions.forEach(reaction => {
+                // If it's a reaction from someone else (we don't track who sent what, but we can avoid showing twice the one we just sent if we wanted, 
+                // but usually in these systems it's fine to see your own reaction pop up if the server confirms it).
+                // Actually, since we do optimistic UI in sendReaction, we should ideally skip it here if we track sent IDs, 
+                // but simpler is just show all from server and maybe avoid optimistic UI if it's too fast.
+                createReactionParticle(reaction.emoji);
+                lastReactionId = Math.max(lastReactionId, reaction.id);
+            });
+        }
+    } catch (error) {
+        console.error("Error fetching reactions:", error);
+    }
+}
+
+async function sendReaction(emoji) {
+    try {
+        // Optimistic UI
+        createReactionParticle(emoji);
+
+        await fetch('api.php?action=send_reaction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emoji })
+        });
+    } catch (error) {
+        console.error("Error sending reaction:", error);
+    }
+}
+
+function createReactionParticle(emoji) {
+    const p = document.createElement('div');
+    p.className = 'reaction-particle';
+    p.innerText = emoji;
+
+    // Ajustes aleatorios
+    const startX = Math.random() * (window.innerWidth - 80) + 40;
+    const randomXOffset = (Math.random() - 0.5) * 150;
+    const randomRotate = (Math.random() - 0.5) * 90;
+
+    p.style.left = `${startX}px`;
+    p.style.setProperty('--random-x', `${randomXOffset}px`);
+    p.style.setProperty('--random-rotate', `${randomRotate}deg`);
+
+    document.body.appendChild(p);
+
+    // Eliminar después de la animación
+    setTimeout(() => p.remove(), 3000);
+}
+
 function updateUIForAdmin() {
     if (isAdmin) {
         document.body.classList.add('admin-mode');
@@ -59,7 +117,7 @@ function updateRegistrationUI() {
     const form = document.getElementById('karaokeForm');
     const message = document.getElementById('registrationClosedMessage');
     const toggle = document.getElementById('registrationToggle');
-    
+
     if (registrationEnabled) {
         form.classList.remove('hidden');
         message.classList.add('hidden');
@@ -67,7 +125,7 @@ function updateRegistrationUI() {
         form.classList.add('hidden');
         message.classList.remove('hidden');
     }
-    
+
     if (toggle) {
         toggle.checked = registrationEnabled;
     }
@@ -75,10 +133,10 @@ function updateRegistrationUI() {
 
 async function toggleRegistration() {
     if (!isAdmin) return;
-    
+
     const toggle = document.getElementById('registrationToggle');
     const enabled = toggle.checked;
-    
+
     try {
         const response = await fetch('api.php?action=toggle_registration', {
             method: 'POST',
@@ -104,7 +162,7 @@ function updateAccessCodeUI() {
     const accessCodeField = document.getElementById('accessCodeField');
     const accessCodeValidatedDiv = document.getElementById('accessCodeValidated');
     const accessCodeInput = document.getElementById('accessCode');
-    
+
     if (accessCodeValidated) {
         accessCodeField.classList.add('hidden');
         accessCodeValidatedDiv.classList.remove('hidden');
@@ -242,6 +300,13 @@ function renderQueue(queue) {
     queueList.innerHTML = '';
     queueBadge.innerText = queue.length;
 
+    // Show/Hide reaction panel Based on whether there is someone singing
+    if (queue.length > 0) {
+        reactionPanel.classList.remove('hidden-panel');
+    } else {
+        reactionPanel.classList.add('hidden-panel');
+    }
+
     if (queue.length === 0) {
         queueList.innerHTML = `
             <div class="flex flex-col items-center justify-center py-20 opacity-20 text-center px-10">
@@ -305,10 +370,10 @@ function renderQueue(queue) {
             }
         });
     } else {
-         if (sortableInstance) {
+        if (sortableInstance) {
             sortableInstance.destroy();
             sortableInstance = null;
-         }
+        }
     }
 }
 
@@ -321,8 +386,8 @@ async function updateOrder(orderedIds) {
         });
         const data = await response.json();
         if (!data.success) {
-             showToast(data.message, "error");
-             fetchQueue(); // Revert
+            showToast(data.message, "error");
+            fetchQueue(); // Revert
         }
     } catch (error) {
         showToast("Error de conexión", "error");

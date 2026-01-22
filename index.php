@@ -196,6 +196,15 @@ require_once __DIR__ . '/db.php';
         </div>
     </div>
 
+    <!-- Reaction Panel -->
+    <div id="reactionPanel" class="reaction-panel hidden-panel">
+        <button onclick="sendReaction('👏')" class="reaction-btn" title="¡Bravo!">👏</button>
+        <button onclick="sendReaction('🔥')" class="reaction-btn" title="¡On fire!">🔥</button>
+        <button onclick="sendReaction('❤️')" class="reaction-btn" title="Me encanta">❤️</button>
+        <button onclick="sendReaction('🤩')" class="reaction-btn" title="¡Increíble!">🤩</button>
+        <button onclick="sendReaction('🙌')" class="reaction-btn" title="¡Sube el nivel!">🙌</button>
+    </div>
+
     <!-- Toast Feedback -->
     <div id="toast"
         class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white text-black font-bold px-8 py-4 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-3">
