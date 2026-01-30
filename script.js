@@ -289,10 +289,10 @@ function showToast(msg, type = "success") {
     document.getElementById('toastMsg').innerText = msg;
     icon.className = `w-2 h-2 rounded-full ${type === 'success' ? 'bg-[#329bac]' : 'bg-[#ce2b47]'}`;
     toast.classList.replace('opacity-0', 'opacity-100');
-    toast.classList.add('-translate-y-4');
+    toast.classList.add('translate-y-4');
     setTimeout(() => {
         toast.classList.replace('opacity-100', 'opacity-0');
-        toast.classList.remove('-translate-y-4');
+        toast.classList.remove('translate-y-4');
     }, 3000);
 }
 
@@ -374,6 +374,27 @@ function renderQueue(queue) {
             sortableInstance.destroy();
             sortableInstance = null;
         }
+    }
+}
+
+async function autoReorderQueue() {
+    if (!isAdmin) return;
+    if (!confirm("¿Deseas optimizar la cola automáticamente? Esto evitará que canten dos veces seguidas y adelantará a los nuevos participantes.")) return;
+
+    try {
+        const response = await fetch('api.php?action=auto_reorder', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        if (data.success) {
+            fetchQueue();
+            showToast(data.message);
+        } else {
+            showToast(data.message, "error");
+        }
+    } catch (error) {
+        showToast("Error de conexión", "error");
     }
 }
 

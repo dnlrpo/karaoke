@@ -162,10 +162,17 @@ require_once __DIR__ . '/db.php';
                             <span id="queueBadge"
                                 class="bg-[#ce2b47] text-[10px] px-2 py-1 rounded-md font-black uppercase">0</span>
                         </h2>
-                        <button id="clearAll"
-                            class="text-slate-500 hover:text-[#ce2b47] text-sm transition-colors hidden admin-only-inline">
-                            <i class="fas fa-trash-can mr-1"></i> Reiniciar Todo
-                        </button>
+                        <div class="flex items-center gap-3">
+                            <button id="autoReorder"
+                                class="text-slate-500 hover:text-[#f9af53] text-sm transition-colors hidden admin-only-inline"
+                                onclick="autoReorderQueue()">
+                                <i class="fas fa-magic mr-1"></i> Optimizar Cola
+                            </button>
+                            <button id="clearAll"
+                                class="text-slate-500 hover:text-[#ce2b47] text-sm transition-colors hidden admin-only-inline">
+                                <i class="fas fa-trash-can mr-1"></i> Reiniciar Todo
+                            </button>
+                        </div>
                     </div>
 
                     <div id="queueList" class="flex-grow overflow-y-auto p-4 space-y-4">
@@ -199,15 +206,19 @@ require_once __DIR__ . '/db.php';
     <!-- Reaction Panel -->
     <div id="reactionPanel" class="reaction-panel hidden-panel">
         <button onclick="sendReaction('👏')" class="reaction-btn" title="¡Bravo!">👏</button>
-        <button onclick="sendReaction('🔥')" class="reaction-btn" title="¡On fire!">🔥</button>
+        <button onclick="sendReaction('🔥')" class="reaction-btn" title="¡Fuego!">🔥</button>
         <button onclick="sendReaction('❤️')" class="reaction-btn" title="Me encanta">❤️</button>
-        <button onclick="sendReaction('🤩')" class="reaction-btn" title="¡Increíble!">🤩</button>
-        <button onclick="sendReaction('🙌')" class="reaction-btn" title="¡Sube el nivel!">🙌</button>
+        <button onclick="sendReaction('😂')" class="reaction-btn" title="¡Jaja!">😂</button>
+        <button onclick="sendReaction('�')" class="reaction-btn" title="¡Me muero!">🤣</button>
+        <button onclick="sendReaction('🤩')" class="reaction-btn" title="¡Crack!">🤩</button>
+        <button onclick="sendReaction('�')" class="reaction-btn" title="¡Qué fuerte!">😱</button>
+        <button onclick="sendReaction('🙉')" class="reaction-btn" title="¡Mis oídos!">🙉</button>
+        <button onclick="sendReaction('🍅')" class="reaction-btn" title="¡Tomatazo!">🍅</button>
     </div>
 
     <!-- Toast Feedback -->
     <div id="toast"
-        class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-white text-black font-bold px-8 py-4 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-3">
+        class="fixed top-10 left-1/2 -translate-x-1/2 bg-white text-black font-bold px-8 py-4 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] opacity-0 transition-all duration-300 pointer-events-none z-[2000] flex items-center gap-3">
         <div id="toastIcon" class="w-2 h-2 rounded-full bg-[#329bac]"></div>
         <span id="toastMsg"></span>
     </div>

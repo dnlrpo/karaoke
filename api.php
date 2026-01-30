@@ -158,6 +158,130 @@ switch ($action) {
         }
         break;
 
+    case 'auto_reorder':
+        if (!isAdmin()) {
+            $response['message'] = 'Acceso denegado';
+            break;
+        }
+
+        // 1. Get current waiting queue
+        $stmt = $pdo->prepare("SELECT id, user_name FROM songs WHERE status = 'waiting' ORDER BY sort_order ASC, id ASC");
+        $stmt->execute();
+        $queue = $stmt->fetchAll();
+
+        if (empty($queue)) {
+            $response['message'] = 'No hay canciones en espera';
+            break;
+        }
+
+        // 2. Identify new singers (0 finished songs)
+        // First get all unique users in queue
+        $usersInQueue = array_unique(array_column($queue, 'user_name'));
+        $stats = [];
+        if (!empty($usersInQueue)) {
+            $placeholders = implode(',', array_fill(0, count($usersInQueue), '?'));
+            $stmtStats = $pdo->prepare("SELECT user_name, COUNT(*) as finished_count FROM songs WHERE status = 'finished' AND created_at >= NOW() - INTERVAL 12 HOUR AND user_name IN ($placeholders) GROUP BY user_name");
+            $stmtStats->execute(array_values($usersInQueue));
+            $statsResult = $stmtStats->fetchAll();
+            foreach ($statsResult as $row) {
+                $stats[$row['user_name']] = $row['finished_count'];
+            }
+        }
+
+        // Fill missing users with 0
+        foreach ($usersInQueue as $user) {
+            if (!isset($stats[$user])) {
+                $stats[$user] = 0;
+            }
+        }
+
+        // 3. Move newbies forward if they are far (index >= 6)
+        $newbies = [];
+        $others = [];
+        foreach ($queue as $index => $song) {
+            if ($stats[$song['user_name']] == 0 && $index >= 6) {
+                $newbies[] = $song;
+            } else {
+                $others[] = $song;
+            }
+        }
+
+        // Insert newbies at position 5 (6th place)
+        foreach ($newbies as $newbie) {
+            array_splice($others, 5, 0, [$newbie]);
+        }
+        
+        $reordered = $others;
+
+        // 4. Redistribute to avoid consecutive singers and ensure 4-turn gap
+        $finalQueue = [];
+        $pool = $reordered;
+        // Keep track of the last few users to ensure a gap (up to 4)
+        $history = []; 
+        $maxGap = 4;
+
+        while (!empty($pool)) {
+            $found = false;
+            foreach ($pool as $index => $song) {
+                // Check if user has sung in the last $maxGap turns
+                if (!in_array($song['user_name'], $history)) {
+                    $finalQueue[] = $song;
+                    
+                    // Add to history and maintain size
+                    array_unshift($history, $song['user_name']);
+                    if (count($history) > $maxGap) {
+                        array_pop($history);
+                    }
+                    
+                    array_splice($pool, $index, 1);
+                    $found = true;
+                    break;
+                }
+            }
+
+            if (!$found) {
+                // If we can't satisfy the gap, try to satisfy at least non-consecutive
+                foreach ($pool as $index => $song) {
+                    if (empty($history) || $song['user_name'] !== $history[0]) {
+                        $finalQueue[] = $song;
+                        array_unshift($history, $song['user_name']);
+                        if (count($history) > $maxGap) array_pop($history);
+                        array_splice($pool, $index, 1);
+                        $found = true;
+                        break;
+                    }
+                }
+                
+                // If still not found, we have to take the first one available
+                if (!$found) {
+                    $song = array_shift($pool);
+                    $finalQueue[] = $song;
+                    array_unshift($history, $song['user_name']);
+                    if (count($history) > $maxGap) array_pop($history);
+                }
+            }
+        }
+
+        // 5. Update database
+        $pdo->beginTransaction();
+        try {
+            // Get max sort_order from singing status to start from there
+            $stmtSinging = $pdo->prepare("SELECT MAX(sort_order) FROM songs WHERE status = 'singing'");
+            $stmtSinging->execute();
+            $baseOrder = (int)$stmtSinging->fetchColumn();
+            
+            $stmtUpdate = $pdo->prepare("UPDATE songs SET sort_order = ? WHERE id = ?");
+            foreach ($finalQueue as $index => $song) {
+                $stmtUpdate->execute([$baseOrder + $index + 1, $song['id']]);
+            }
+            $pdo->commit();
+            $response = ['success' => true, 'message' => 'Cola optimizada con éxito'];
+        } catch (Exception $e) {
+            $pdo->rollBack();
+            $response['message'] = 'Error al actualizar: ' . $e->getMessage();
+        }
+        break;
+
     case 'remove_from_queue':
         if (!isAdmin()) {
             $response['message'] = 'Acceso denegado';
