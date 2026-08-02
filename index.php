@@ -9,10 +9,10 @@ require_once __DIR__ . '/db.php';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Karaoke La Trilla Cultural</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="assets/css/tailwind.min.css">
+    <link href="assets/vendor/fontawesome/all.min.css" rel="stylesheet">
+    <script src="assets/js/sortable.min.js"></script>
+    <link rel="stylesheet" href="assets/css/style.css">
 </head>
 
 <body class="p-4 md:p-8">
@@ -22,7 +22,7 @@ require_once __DIR__ . '/db.php';
         <!-- Header -->
         <header class="flex flex-col md:flex-row justify-between items-center gap-6">
             <div class="flex items-center gap-4">
-                <img src="https://latrillacultural.com/img/logo-circular.webp" alt="Logo La Trilla"
+                <img src="assets/img/logo-circular.webp" alt="Logo La Trilla"
                     class="w-16 h-16 logo-img">
                 <div>
                     <h1 class="text-3xl font-bold tracking-tight text-[#ce2b47]">Karaoke <span class="text-[#329bac]">La Trilla</span>
@@ -189,7 +189,7 @@ require_once __DIR__ . '/db.php';
         class="fixed inset-0 bg-black/90 backdrop-blur-md hidden items-center justify-center z-[100] p-4">
         <div
             class="glass-card p-10 w-full max-w-sm border-[#329bac]/50 shadow-[0_0_50px_rgba(50,155,172,0.2)] text-center">
-            <img src="https://latrillacultural.com/img/logo-circular.webp" class="w-20 h-20 mx-auto mb-6 opacity-80"
+            <img src="assets/img/logo-circular.webp" class="w-20 h-20 mx-auto mb-6 opacity-80"
                 alt="Logo">
             <h3 class="text-2xl font-bold mb-2 text-[#ce2b47] title-font">Acceso Staff</h3>
             <p class="text-slate-400 text-sm mb-8 MontserratLight">Uso exclusivo del personal</p>
@@ -223,7 +223,7 @@ require_once __DIR__ . '/db.php';
         <span id="toastMsg"></span>
     </div>
 
-    <script src="script.js"></script>
+    <script src="assets/js/app.js"></script>
 </body>
 
 </html>
