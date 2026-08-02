@@ -28,10 +28,11 @@
 - **Para el Negocio:** Sistema escalable que mejora la experiencia del cliente y optimiza la operación
 
 ### Stack Tecnológico
-- **Frontend:** HTML5, JavaScript (ES6+), TailwindCSS
-- **Backend:** PHP 7.4+, MySQL/MariaDB
-- **Librerías:** SortableJS, Font Awesome
-- **Arquitectura:** REST API, Polling en tiempo real
+- **Frontend:** HTML5, JavaScript (ES6+), TailwindCSS (compilado, sin CDN)
+- **Backend:** PHP 8.4+, MySQL/MariaDB
+- **Librerías:** SortableJS 1.15.7, Font Awesome 7.3.1 (locales en `assets/`)
+- **Testing:** PHPUnit 13 (dev)
+- **Arquitectura:** REST API, Polling unificado (cola + reacciones cada 5s)
 
 ---
 
@@ -849,12 +850,18 @@ Q1 2026                Q2 2026                Q3 2026                Q4 2026
 - ✅ Experiencia en tiempo real fluida
 
 ### Áreas de Mejora Identificadas
-- 🔄 Migrar de polling a WebSockets para verdadero real-time
-- 🔄 Implementar tests automatizados (unit, integration, e2e)
-- 🔄 Añadir logging y monitoring (errores, performance)
-- 🔄 Optimizar queries de DB con índices
-- 🔄 Implementar caché (Redis) para reducir carga de DB
-- 🔄 Añadir validación de inputs en frontend (además de backend)
+- ✅ **Migrado a PHP 8.4** con hardening de sesión (HttpOnly, SameSite, Secure)
+- ✅ **CSRF tokens** en todas las acciones administrativas
+- ✅ **Rate limiting** en reacciones (whitelist de emojis + límite por sesión) y login (IP+sesión)
+- ✅ **Reacciones antiguas purgadas** automáticamente (> 1 hora)
+- ✅ **Polling unificado** (cola + reacciones en una sola request cada 5s)
+- ✅ **Tests automatizados** con PHPUnit 13 (`composer test`)
+- ✅ **Assets 100% locales** (Tailwind compilado, Font Awesome, SortableJS, Google Fonts, logo) — sin CDN
+- ✅ **Migraciones de esquema** versionadas (sin DDL por request)
+- ✅ **PIN inicial aleatorio** (nunca `1234`) y código de noche sin fallback hardcodeado
+- 🔄 **WebSockets** para real-time puro (opcional, futuro)
+- 🔄 **Logging y monitoring** (error_log básico; pendiente agregación)
+- 🔄 **Caché (Redis)** para reducir carga de DB (opcional, futuro)
 
 ### Riesgos Técnicos
 - ⚠️ **Escalabilidad:** Polling puede ser costoso con muchos usuarios
@@ -863,10 +870,12 @@ Q1 2026                Q2 2026                Q3 2026                Q4 2026
 - ⚠️ **Browser Compatibility:** Dependencia de JavaScript moderno
 
 ### Dependencias Externas
-- TailwindCSS CDN (considerar bundle local para producción)
-- SortableJS CDN (considerar bundle local)
-- Font Awesome CDN (considerar bundle local)
-- Logo externo (latrillacultural.com)
+- ✅ TailwindCSS 4.3.3 compilado en `assets/css/tailwind.min.css` (commiteado)
+- ✅ SortableJS 1.15.7 en `assets/js/sortable.min.js`
+- ✅ Font Awesome 7.3.1 en `assets/vendor/fontawesome/`
+- ✅ Google Fonts (Courgette, Montserrat) en `assets/fonts/`
+- ✅ Logo en `assets/img/logo-circular.webp`
+- ⚠️ Ninguna dependencia de runtime; solo Node.js (dev) para regenerar el CSS
 
 ---
 
