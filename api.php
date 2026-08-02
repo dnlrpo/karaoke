@@ -1,67 +1,106 @@
 <?php
 // api.php - REST API for Karaoke Operations
+declare(strict_types=1);
+
 header('Content-Type: application/json');
 require_once __DIR__ . '/db.php';
 
-session_start();
+secureSessionStart();
 
 $action = $_GET['action'] ?? '';
 $response = ['success' => false, 'message' => 'Invalid action'];
+
+/**
+ * Read and decode the JSON request body.
+ */
+function readJsonBody(): array
+{
+    $raw = file_get_contents('php://input');
+    $data = json_decode($raw !== false ? $raw : '', true);
+    return is_array($data) ? $data : [];
+}
+
+/**
+ * Admin check + CSRF validation for mutating staff actions.
+ */
+function requireCsrfAdmin(): bool
+{
+    return isAdmin() && csrfValidate($_SERVER['HTTP_X_CSRF_TOKEN'] ?? null);
+}
+
+/**
+ * Opportunistic cleanup of old reactions (2% per request).
+ */
+function cleanupReactions(PDO $pdo): void
+{
+    if (random_int(1, 100) <= 2) {
+        $pdo->exec("DELETE FROM reactions WHERE created_at < NOW() - INTERVAL 1 HOUR");
+    }
+}
 
 switch ($action) {
     case 'get_queue':
         $stmt = $pdo->prepare("SELECT id, user_name, song_title, artist_name, status FROM songs WHERE status IN ('waiting', 'singing') ORDER BY sort_order ASC, id ASC");
         $stmt->execute();
-        
+
         // Get registration status
         $stmtReg = $pdo->prepare("SELECT `value` FROM settings WHERE `key` = 'registration_enabled'");
         $stmtReg->execute();
         $regResult = $stmtReg->fetch();
-        $registrationEnabled = $regResult ? (bool)$regResult['value'] : true;
-        
+        $registrationEnabled = $regResult !== false && (bool)$regResult['value'];
+
+        // Unified polling: new reactions since the client's last id
+        $since = max(0, (int)($_GET['since'] ?? 0));
+        $stmtReactions = $pdo->prepare("SELECT id, emoji FROM reactions WHERE id > ? AND created_at >= NOW() - INTERVAL 30 SECOND ORDER BY id ASC");
+        $stmtReactions->execute([$since]);
+
+        cleanupReactions($pdo);
+
         $response = [
             'success' => true,
             'queue' => $stmt->fetchAll(),
             'night_code' => isAdmin() ? getNightCode($pdo) : null,
             'is_admin' => isAdmin(),
             'registration_enabled' => $registrationEnabled,
-            'access_code_validated' => isset($_SESSION['access_code_validated']) && 
-                                       isset($_SESSION['access_code_time']) && 
-                                       (time() - $_SESSION['access_code_time']) < 28800 // 8 hours
+            'access_code_validated' => isset($_SESSION['access_code_validated']) &&
+                                       isset($_SESSION['access_code_time']) &&
+                                       (time() - $_SESSION['access_code_time']) < 28800, // 8 hours
+            'reactions' => $stmtReactions->fetchAll(),
+            'csrf_token' => csrfToken(),
         ];
         break;
 
     case 'add_to_queue':
-        $data = json_decode(file_get_contents('php://input'), true);
-        $user_name = trim($data['userName'] ?? '');
-        $song_title = trim($data['songTitle'] ?? '');
-        $artist_name = trim($data['artistName'] ?? '');
-        $access_code = strtoupper(trim($data['accessCode'] ?? ''));
+        $data = readJsonBody();
+        $user_name = trim((string)($data['userName'] ?? ''));
+        $song_title = trim((string)($data['songTitle'] ?? ''));
+        $artist_name = trim((string)($data['artistName'] ?? ''));
+        $access_code = strtoupper(trim((string)($data['accessCode'] ?? '')));
 
         // Check if registration is enabled
         $stmtReg = $pdo->prepare("SELECT `value` FROM settings WHERE `key` = 'registration_enabled'");
         $stmtReg->execute();
         $regResult = $stmtReg->fetch();
-        $registrationEnabled = $regResult ? (bool)$regResult['value'] : true;
-        
+        $registrationEnabled = $regResult !== false && (bool)$regResult['value'];
+
         if (!$registrationEnabled) {
             $response['message'] = 'El registro está cerrado en este momento';
             break;
         }
 
-        if (!$user_name || !$song_title || !$artist_name) {
+        if ($user_name === '' || $song_title === '' || $artist_name === '') {
             $response['message'] = 'Faltan campos obligatorios';
             break;
         }
 
         // Check session for access code validation
-        $codeValidated = isset($_SESSION['access_code_validated']) && 
-                        isset($_SESSION['access_code_time']) && 
-                        (time() - $_SESSION['access_code_time']) < 28800; // 8 hours
+        $codeValidated = isset($_SESSION['access_code_validated']) &&
+                         isset($_SESSION['access_code_time']) &&
+                         (time() - $_SESSION['access_code_time']) < 28800; // 8 hours
 
         if (!$codeValidated) {
-            // Need to validate access code
-            if ($access_code !== getNightCode($pdo)) {
+            $nightCode = getNightCode($pdo);
+            if ($nightCode === '' || !hash_equals($nightCode, $access_code)) {
                 $response['message'] = 'Código de local incorrecto';
                 break;
             }
@@ -74,7 +113,7 @@ switch ($action) {
         $stmtMax = $pdo->prepare("SELECT MAX(sort_order) as max_order FROM songs WHERE status IN ('waiting', 'singing')");
         $stmtMax->execute();
         $maxOrder = $stmtMax->fetchColumn();
-        $newSortOrder = ($maxOrder !== false) ? $maxOrder + 1 : 1;
+        $newSortOrder = ($maxOrder !== false && $maxOrder !== null) ? (int)$maxOrder + 1 : 1;
 
         $stmt = $pdo->prepare("INSERT INTO songs (user_name, song_title, artist_name, sort_order) VALUES (?, ?, ?, ?)");
         if ($stmt->execute([$user_name, $song_title, $artist_name, $newSortOrder])) {
@@ -83,10 +122,10 @@ switch ($action) {
         break;
 
     case 'login':
-        $data = json_decode(file_get_contents('php://input'), true);
-        $pin = $data['pin'] ?? '';
+        $data = readJsonBody();
+        $pin = (string)($data['pin'] ?? '');
 
-        // Rate limiting for login
+        // Rate limiting for login (session + IP)
         if (!isset($_SESSION['login_attempts'])) {
             $_SESSION['login_attempts'] = 0;
             $_SESSION['last_attempt_time'] = 0;
@@ -106,7 +145,7 @@ switch ($action) {
         $stmt->execute();
         $admin = $stmt->fetch();
 
-        if ($admin && password_verify($pin, $admin['password_hash'])) {
+        if ($admin !== false && password_verify($pin, $admin['password_hash'])) {
             session_regenerate_id(true);
             $_SESSION['admin_auth'] = true;
             $_SESSION['login_attempts'] = 0; // Reset attempts on success
@@ -115,7 +154,7 @@ switch ($action) {
             $_SESSION['login_attempts']++;
             $_SESSION['last_attempt_time'] = $currentTime;
             $remainingAttempts = $maxAttempts - $_SESSION['login_attempts'];
-            
+
             if ($remainingAttempts <= 0) {
                 $response['message'] = 'PIN Incorrecto. Acceso bloqueado por 5 minutos.';
             } else {
@@ -125,21 +164,41 @@ switch ($action) {
         break;
 
     case 'logout':
+        if (!requireCsrfAdmin()) {
+            $response['message'] = 'Acceso denegado';
+            break;
+        }
         $_SESSION['admin_auth'] = false;
         session_destroy();
         $response = ['success' => true, 'message' => 'Sesión Staff Cerrada'];
         break;
 
     case 'reorder_queue':
-        if (!isAdmin()) {
+        if (!requireCsrfAdmin()) {
             $response['message'] = 'Acceso denegado';
             break;
         }
-        $data = json_decode(file_get_contents('php://input'), true);
+        $data = readJsonBody();
         $orderedIds = $data['orderedIds'] ?? [];
 
-        if (empty($orderedIds)) {
+        if (!is_array($orderedIds) || empty($orderedIds)) {
             $response['message'] = 'Lista vacía';
+            break;
+        }
+
+        $validIds = array_map('intval', $orderedIds);
+        foreach ($validIds as $id) {
+            if ($id <= 0) {
+                $response['message'] = 'IDs inválidos';
+                break 2;
+            }
+        }
+
+        // The submitted list must match the active queue exactly
+        $stmt = $pdo->query("SELECT id FROM songs WHERE status IN ('waiting', 'singing')");
+        $activeIds = array_map('intval', array_column($stmt->fetchAll(), 'id'));
+        if (array_diff($validIds, $activeIds) || array_diff($activeIds, $validIds)) {
+            $response['message'] = 'La lista no coincide con la cola activa';
             break;
         }
 
@@ -147,19 +206,20 @@ switch ($action) {
         try {
             $sql = "UPDATE songs SET sort_order = ? WHERE id = ?";
             $stmt = $pdo->prepare($sql);
-            foreach ($orderedIds as $index => $id) {
+            foreach ($validIds as $index => $id) {
                 $stmt->execute([$index + 1, $id]);
             }
             $pdo->commit();
             $response = ['success' => true, 'message' => 'Cola reordenada'];
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $pdo->rollBack();
-            $response['message'] = 'Error al reordenar: ' . $e->getMessage();
+            $response['message'] = 'Error al reordenar';
+            error_log("reorder_queue: " . $e->getMessage());
         }
         break;
 
     case 'auto_reorder':
-        if (!isAdmin()) {
+        if (!requireCsrfAdmin()) {
             $response['message'] = 'Acceso denegado';
             break;
         }
@@ -175,7 +235,6 @@ switch ($action) {
         }
 
         // 2. Identify new singers (0 finished songs)
-        // First get all unique users in queue
         $usersInQueue = array_unique(array_column($queue, 'user_name'));
         $stats = [];
         if (!empty($usersInQueue)) {
@@ -184,22 +243,20 @@ switch ($action) {
             $stmtStats->execute(array_values($usersInQueue));
             $statsResult = $stmtStats->fetchAll();
             foreach ($statsResult as $row) {
-                $stats[$row['user_name']] = $row['finished_count'];
+                $stats[$row['user_name']] = (int)$row['finished_count'];
             }
         }
 
         // Fill missing users with 0
         foreach ($usersInQueue as $user) {
-            if (!isset($stats[$user])) {
-                $stats[$user] = 0;
-            }
+            $stats[$user] ??= 0;
         }
 
         // 3. Move newbies forward if they are far (index >= 6)
         $newbies = [];
         $others = [];
         foreach ($queue as $index => $song) {
-            if ($stats[$song['user_name']] == 0 && $index >= 6) {
+            if ($stats[$song['user_name']] === 0 && $index >= 6) {
                 $newbies[] = $song;
             } else {
                 $others[] = $song;
@@ -210,29 +267,26 @@ switch ($action) {
         foreach ($newbies as $newbie) {
             array_splice($others, 5, 0, [$newbie]);
         }
-        
+
         $reordered = $others;
 
         // 4. Redistribute to avoid consecutive singers and ensure 4-turn gap
         $finalQueue = [];
         $pool = $reordered;
-        // Keep track of the last few users to ensure a gap (up to 4)
-        $history = []; 
+        $history = [];
         $maxGap = 4;
 
         while (!empty($pool)) {
             $found = false;
             foreach ($pool as $index => $song) {
-                // Check if user has sung in the last $maxGap turns
-                if (!in_array($song['user_name'], $history)) {
+                if (!in_array($song['user_name'], $history, true)) {
                     $finalQueue[] = $song;
-                    
-                    // Add to history and maintain size
+
                     array_unshift($history, $song['user_name']);
                     if (count($history) > $maxGap) {
                         array_pop($history);
                     }
-                    
+
                     array_splice($pool, $index, 1);
                     $found = true;
                     break;
@@ -240,64 +294,83 @@ switch ($action) {
             }
 
             if (!$found) {
-                // If we can't satisfy the gap, try to satisfy at least non-consecutive
                 foreach ($pool as $index => $song) {
                     if (empty($history) || $song['user_name'] !== $history[0]) {
                         $finalQueue[] = $song;
                         array_unshift($history, $song['user_name']);
-                        if (count($history) > $maxGap) array_pop($history);
+                        if (count($history) > $maxGap) {
+                            array_pop($history);
+                        }
                         array_splice($pool, $index, 1);
                         $found = true;
                         break;
                     }
                 }
-                
-                // If still not found, we have to take the first one available
+
                 if (!$found) {
                     $song = array_shift($pool);
                     $finalQueue[] = $song;
                     array_unshift($history, $song['user_name']);
-                    if (count($history) > $maxGap) array_pop($history);
+                    if (count($history) > $maxGap) {
+                        array_pop($history);
+                    }
                 }
             }
         }
 
-        // 5. Update database
+        // 5. Renumber all active songs sequentially, then place optimized queue after singing
         $pdo->beginTransaction();
         try {
-            // Get max sort_order from singing status to start from there
-            $stmtSinging = $pdo->prepare("SELECT MAX(sort_order) FROM songs WHERE status = 'singing'");
-            $stmtSinging->execute();
-            $baseOrder = (int)$stmtSinging->fetchColumn();
-            
+            $stmtAll = $pdo->query("SELECT id, status FROM songs WHERE status IN ('waiting', 'singing') ORDER BY sort_order ASC, id ASC");
+            $allActive = $stmtAll->fetchAll();
+
             $stmtUpdate = $pdo->prepare("UPDATE songs SET sort_order = ? WHERE id = ?");
+            $order = 0;
+            $baseOrder = 0;
+            foreach ($allActive as $row) {
+                $order++;
+                $stmtUpdate->execute([$order, $row['id']]);
+                if ($row['status'] === 'singing') {
+                    $baseOrder = $order;
+                }
+            }
+
             foreach ($finalQueue as $index => $song) {
                 $stmtUpdate->execute([$baseOrder + $index + 1, $song['id']]);
             }
             $pdo->commit();
             $response = ['success' => true, 'message' => 'Cola optimizada con éxito'];
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $pdo->rollBack();
-            $response['message'] = 'Error al actualizar: ' . $e->getMessage();
+            $response['message'] = 'Error al actualizar';
+            error_log("auto_reorder: " . $e->getMessage());
         }
         break;
 
     case 'remove_from_queue':
-        if (!isAdmin()) {
+        if (!requireCsrfAdmin()) {
             $response['message'] = 'Acceso denegado';
             break;
         }
-        $data = json_decode(file_get_contents('php://input'), true);
+        $data = readJsonBody();
         $id = $data['id'] ?? null;
 
-        $stmt = $pdo->prepare("UPDATE songs SET status = 'finished' WHERE id = ?");
-        if ($stmt->execute([$id])) {
+        if (!is_numeric($id) || (int)$id <= 0) {
+            $response['message'] = 'ID inválido';
+            break;
+        }
+
+        $stmt = $pdo->prepare("UPDATE songs SET status = 'finished' WHERE id = ? AND status IN ('waiting', 'singing')");
+        $stmt->execute([(int)$id]);
+        if ($stmt->rowCount() > 0) {
             $response = ['success' => true, 'message' => 'Cola actualizada'];
+        } else {
+            $response['message'] = 'Participante no encontrado en la cola';
         }
         break;
 
     case 'clear_queue':
-        if (!isAdmin()) {
+        if (!requireCsrfAdmin()) {
             $response['message'] = 'Acceso denegado';
             break;
         }
@@ -308,14 +381,14 @@ switch ($action) {
         break;
 
     case 'update_night_code':
-        if (!isAdmin()) {
+        if (!requireCsrfAdmin()) {
             $response['message'] = 'Acceso denegado';
             break;
         }
-        $data = json_decode(file_get_contents('php://input'), true);
-        $new_code = strtoupper(trim($data['newCode'] ?? ''));
+        $data = readJsonBody();
+        $new_code = strtoupper(trim((string)($data['newCode'] ?? '')));
 
-        if (!$new_code) {
+        if ($new_code === '') {
             $response['message'] = 'El código no puede estar vacío';
             break;
         }
@@ -327,12 +400,12 @@ switch ($action) {
         break;
 
     case 'update_staff_pin':
-        if (!isAdmin()) {
+        if (!requireCsrfAdmin()) {
             $response['message'] = 'Acceso denegado';
             break;
         }
-        $data = json_decode(file_get_contents('php://input'), true);
-        $new_pin = trim($data['newPin'] ?? '');
+        $data = readJsonBody();
+        $new_pin = trim((string)($data['newPin'] ?? ''));
 
         if (strlen($new_pin) !== 4 || !is_numeric($new_pin)) {
             $response['message'] = 'El PIN debe ser de 4 dígitos numéricos';
@@ -347,11 +420,11 @@ switch ($action) {
         break;
 
     case 'toggle_registration':
-        if (!isAdmin()) {
+        if (!requireCsrfAdmin()) {
             $response['message'] = 'Acceso denegado';
             break;
         }
-        $data = json_decode(file_get_contents('php://input'), true);
+        $data = readJsonBody();
         $enabled = isset($data['enabled']) ? ($data['enabled'] ? '1' : '0') : '1';
 
         $stmt = $pdo->prepare("REPLACE INTO settings (`key`, `value`) VALUES ('registration_enabled', ?)");
@@ -362,19 +435,36 @@ switch ($action) {
         break;
 
     case 'send_reaction':
-        $data = json_decode(file_get_contents('php://input'), true);
-        $emoji = trim($data['emoji'] ?? '');
-        if ($emoji) {
-            $stmt = $pdo->prepare("INSERT INTO reactions (emoji) VALUES (?)");
-            if ($stmt->execute([$emoji])) {
-                $response = ['success' => true];
-            }
+        $data = readJsonBody();
+        $emoji = trim((string)($data['emoji'] ?? ''));
+
+        $allowedEmojis = ['👏', '🔥', '❤️', '😂', '🤩', '😱', '🙉', '🍅'];
+        if (!in_array($emoji, $allowedEmojis, true)) {
+            $response['message'] = 'Emoji no permitido';
+            break;
         }
+
+        // Rate limit: max 15 reactions per 30 seconds per session
+        $now = time();
+        if (($_SESSION['reaction_window_start'] ?? 0) < $now - 30) {
+            $_SESSION['reaction_window_start'] = $now;
+            $_SESSION['reaction_count'] = 0;
+        }
+        if (($_SESSION['reaction_count'] ?? 0) >= 15) {
+            $response['message'] = 'Demasiadas reacciones. Espera un momento.';
+            break;
+        }
+
+        $stmt = $pdo->prepare("INSERT INTO reactions (emoji) VALUES (?)");
+        if ($stmt->execute([$emoji])) {
+            $_SESSION['reaction_count'] = ($_SESSION['reaction_count'] ?? 0) + 1;
+            $response = ['success' => true, 'id' => (int)$pdo->lastInsertId()];
+        }
+        cleanupReactions($pdo);
         break;
 
     case 'get_reactions':
-        $since = (int)($_GET['since'] ?? 0);
-        // Solo traer reacciones de los últimos 30 segundos para evitar sobrecarga si el ID es muy viejo
+        $since = max(0, (int)($_GET['since'] ?? 0));
         $stmt = $pdo->prepare("SELECT id, emoji FROM reactions WHERE id > ? AND created_at >= NOW() - INTERVAL 30 SECOND ORDER BY id ASC");
         $stmt->execute([$since]);
         $response = [
@@ -385,4 +475,3 @@ switch ($action) {
 }
 
 echo json_encode($response);
-?>

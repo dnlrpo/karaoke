@@ -5,6 +5,8 @@ let currentQueue = [];
 let registrationEnabled = true;
 let accessCodeValidated = false;
 let lastReactionId = 0;
+let csrfToken = "";
+const sentReactionIds = new Set();
 
 const form = document.getElementById('karaokeForm');
 const queueList = document.getElementById('queueList');
@@ -16,15 +18,13 @@ const reactionPanel = document.getElementById('reactionPanel');
 // Initial Load
 async function init() {
     await fetchQueue();
-    // Polling for updates
+    // Unified polling: queue + reactions in a single request
     setInterval(fetchQueue, 5000);
-    // Polling for reactions faster
-    setInterval(fetchReactions, 2000);
 }
 
 async function fetchQueue() {
     try {
-        const response = await fetch('api.php?action=get_queue');
+        const response = await fetch(`api.php?action=get_queue&since=${lastReactionId}`);
         const data = await response.json();
         if (data.success) {
             currentQueue = data.queue;
@@ -32,6 +32,7 @@ async function fetchQueue() {
             isAdmin = data.is_admin;
             registrationEnabled = data.registration_enabled;
             accessCodeValidated = data.access_code_validated || false;
+            if (data.csrf_token) csrfToken = data.csrf_token;
             updateUIForAdmin();
             updateRegistrationUI();
             updateAccessCodeUI();
@@ -39,28 +40,15 @@ async function fetchQueue() {
                 nightCode = data.night_code;
                 codeLabel.innerText = nightCode;
             }
-        }
-    } catch (error) {
-        console.error("Error fetching queue:", error);
-    }
-}
-
-async function fetchReactions() {
-    try {
-        const response = await fetch(`api.php?action=get_reactions&since=${lastReactionId}`);
-        const data = await response.json();
-        if (data.success && data.reactions.length > 0) {
-            data.reactions.forEach(reaction => {
-                // If it's a reaction from someone else (we don't track who sent what, but we can avoid showing twice the one we just sent if we wanted, 
-                // but usually in these systems it's fine to see your own reaction pop up if the server confirms it).
-                // Actually, since we do optimistic UI in sendReaction, we should ideally skip it here if we track sent IDs, 
-                // but simpler is just show all from server and maybe avoid optimistic UI if it's too fast.
+            // Render only reactions we have not sent ourselves
+            (data.reactions || []).forEach(reaction => {
+                if (sentReactionIds.has(reaction.id)) return;
                 createReactionParticle(reaction.emoji);
                 lastReactionId = Math.max(lastReactionId, reaction.id);
             });
         }
     } catch (error) {
-        console.error("Error fetching reactions:", error);
+        console.error("Error fetching queue:", error);
     }
 }
 
@@ -69,11 +57,17 @@ async function sendReaction(emoji) {
         // Optimistic UI
         createReactionParticle(emoji);
 
-        await fetch('api.php?action=send_reaction', {
+        const response = await fetch('api.php?action=send_reaction', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: adminFetchHeaders(),
             body: JSON.stringify({ emoji })
         });
+        const data = await response.json();
+        // Track the server id so the next poll skips our own reaction
+        if (data.success && data.id) {
+            sentReactionIds.add(data.id);
+            lastReactionId = Math.max(lastReactionId, data.id);
+        }
     } catch (error) {
         console.error("Error sending reaction:", error);
     }
@@ -140,7 +134,7 @@ async function toggleRegistration() {
     try {
         const response = await fetch('api.php?action=toggle_registration', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: adminFetchHeaders(),
             body: JSON.stringify({ enabled })
         });
         const data = await response.json();
@@ -186,7 +180,7 @@ async function updateNightCode() {
     try {
         const response = await fetch('api.php?action=update_night_code', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: adminFetchHeaders(),
             body: JSON.stringify({ newCode: val })
         });
         const data = await response.json();
@@ -215,7 +209,7 @@ async function updateStaffPin() {
     try {
         const response = await fetch('api.php?action=update_staff_pin', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: adminFetchHeaders(),
             body: JSON.stringify({ newPin: val })
         });
         const data = await response.json();
@@ -249,7 +243,7 @@ async function checkPin() {
     try {
         const response = await fetch('api.php?action=login', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: adminFetchHeaders(),
             body: JSON.stringify({ pin })
         });
         const data = await response.json();
@@ -270,7 +264,7 @@ async function checkPin() {
 
 async function logoutAdmin() {
     try {
-        const response = await fetch('api.php?action=logout');
+        const response = await fetch('api.php?action=logout', { headers: { 'X-CSRF-Token': csrfToken } });
         const data = await response.json();
         if (data.success) {
             isAdmin = false;
@@ -281,6 +275,10 @@ async function logoutAdmin() {
     } catch (error) {
         showToast("Error de conexión", "error");
     }
+}
+
+function adminFetchHeaders() {
+    return { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken };
 }
 
 function showToast(msg, type = "success") {
@@ -384,7 +382,7 @@ async function autoReorderQueue() {
     try {
         const response = await fetch('api.php?action=auto_reorder', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: adminFetchHeaders()
         });
         const data = await response.json();
         if (data.success) {
@@ -402,7 +400,7 @@ async function updateOrder(orderedIds) {
     try {
         const response = await fetch('api.php?action=reorder_queue', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: adminFetchHeaders(),
             body: JSON.stringify({ orderedIds })
         });
         const data = await response.json();
@@ -421,7 +419,7 @@ async function removeFromQueue(id) {
     try {
         const response = await fetch('api.php?action=remove_from_queue', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: adminFetchHeaders(),
             body: JSON.stringify({ id })
         });
         const data = await response.json();
@@ -446,7 +444,7 @@ form.addEventListener('submit', async (e) => {
     try {
         const response = await fetch('api.php?action=add_to_queue', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: adminFetchHeaders(),
             body: JSON.stringify(payload)
         });
         const data = await response.json();
@@ -468,7 +466,7 @@ form.addEventListener('submit', async (e) => {
 document.getElementById('clearAll').addEventListener('click', async () => {
     if (isAdmin && confirm("¿Deseas reiniciar toda la lista de hoy?")) {
         try {
-            const response = await fetch('api.php?action=clear_queue');
+            const response = await fetch('api.php?action=clear_queue', { headers: { 'X-CSRF-Token': csrfToken } });
             const data = await response.json();
             if (data.success) {
                 fetchQueue();
