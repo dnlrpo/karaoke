@@ -311,7 +311,7 @@ function renderQueue(queue) {
         queueList.innerHTML = `
             <div class="flex flex-col items-center justify-center py-20 opacity-20 text-center px-10">
                 <img src="https://latrillacultural.com/img/logo-circular.webp" class="w-32 h-32 mb-6 grayscale">
-                <p class="text-xl font-bold">LISTA VACÍA</p>
+                <p class="text-xl font-bold title-font text-[#ce2b47]">Lista Vacía</p>
                 <p class="text-sm">Ingresa el código del local para anotarte.</p>
             </div>
         `;
@@ -347,9 +347,9 @@ function renderQueue(queue) {
                 <div>
                     <h4 class="font-bold text-white text-lg leading-tight">${escapeHTML(item.user_name)}</h4>
                     <p class="text-sm mt-0.5">
-                        <span class="${index === 0 ? 'text-[#f9af53]' : 'text-[#329bac]'} font-bold">${escapeHTML(item.song_title)}</span> 
+                        <span class="text-[#329bac] font-bold">${escapeHTML(item.song_title)}</span> 
                         <span class="text-slate-500 mx-1">/</span> 
-                        <span class="text-slate-400">${escapeHTML(item.artist_name)}</span>
+                        <span class="text-slate-400 MontserratRegular">${escapeHTML(item.artist_name)}</span>
                     </p>
                 </div>
             </div>

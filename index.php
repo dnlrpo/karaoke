@@ -24,7 +24,7 @@ require_once __DIR__ . '/db.php';
                 <img src="https://latrillacultural.com/img/logo-circular.webp" alt="Logo La Trilla"
                     class="w-16 h-16 logo-img">
                 <div>
-                    <h1 class="text-3xl font-bold tracking-tight">KARAOKE <span class="text-[#f9af53]">LA TRILLA</span>
+                    <h1 class="text-3xl font-bold tracking-tight text-[#ce2b47]">Karaoke <span class="text-[#329bac]">La Trilla</span>
                     </h1>
                     <div class="flex items-center gap-2 mt-1">
                         <p class="text-slate-400 text-sm">Cultura y Música</p>
@@ -48,7 +48,7 @@ require_once __DIR__ . '/db.php';
                 <!-- Registro (Asistentes) -->
                 <section id="registrationSection" class="glass-card p-8 shadow-2xl border-t-4 border-[#329bac]">
                     <h2 class="text-xl font-bold mb-6 flex items-center gap-2 text-white">
-                        <i class="fas fa-play-circle text-[#f9af53]"></i> Pide tu Turno
+                        <i class="fas fa-play-circle text-[#f9af53]"></i> <span class="text-[#329bac]">Pide tu Turno</span>
                     </h2>
                     <form id="karaokeForm" class="space-y-4">
                         <div>
@@ -111,7 +111,7 @@ require_once __DIR__ . '/db.php';
                                 <input type="text" id="newNightCode" placeholder="Nuevo código"
                                     class="input-field flex-grow rounded-lg px-3 py-2 text-sm">
                                 <button onclick="updateNightCode()"
-                                    class="bg-[#f9af53] text-black px-4 py-2 rounded-lg font-bold text-xs hover:bg-white transition-all whitespace-nowrap">
+                                    class="btn-primary px-4 py-2 rounded-lg text-xs whitespace-nowrap">
                                     CAMBIAR
                                 </button>
                             </div>
@@ -128,7 +128,7 @@ require_once __DIR__ . '/db.php';
                                 <input type="password" id="newStaffPin" placeholder="Nuevo PIN" maxlength="4"
                                     class="input-field flex-grow rounded-lg px-3 py-2 text-sm text-center tracking-[0.3em] min-w-0">
                                 <button onclick="updateStaffPin()"
-                                    class="bg-white/10 text-white px-4 py-2 rounded-lg font-bold text-xs hover:bg-[#329bac] transition-all border border-white/10 whitespace-nowrap">
+                                    class="btn-primary px-4 py-2 rounded-lg text-xs whitespace-nowrap">
                                     GUARDAR
                                 </button>
                             </div>
@@ -153,12 +153,12 @@ require_once __DIR__ . '/db.php';
             </div>
 
             <!-- Lista de Cola -->
-            <div class="lg:col-span-7">
+            <div class="lg:col-span-7 pb-32">
                 <section class="glass-card h-full flex flex-col shadow-2xl min-h-[500px] border-white/10">
                     <div
                         class="p-6 border-b border-white/10 flex justify-between items-center bg-white/5 rounded-t-2xl">
                         <h2 class="text-xl font-bold flex items-center gap-3">
-                            <i class="fas fa-list-ul text-[#f9af53]"></i> Próximos Cantantes
+                            <i class="fas fa-list-ul text-[#f9af53]"></i> <span class="text-[#329bac]">Próximos Cantantes</span>
                             <span id="queueBadge"
                                 class="bg-[#ce2b47] text-[10px] px-2 py-1 rounded-md font-black uppercase">0</span>
                         </h2>
@@ -190,13 +190,13 @@ require_once __DIR__ . '/db.php';
             class="glass-card p-10 w-full max-w-sm border-[#329bac]/50 shadow-[0_0_50px_rgba(50,155,172,0.2)] text-center">
             <img src="https://latrillacultural.com/img/logo-circular.webp" class="w-20 h-20 mx-auto mb-6 opacity-80"
                 alt="Logo">
-            <h3 class="text-2xl font-bold mb-2">Acceso Staff</h3>
-            <p class="text-slate-400 text-sm mb-8">Uso exclusivo del personal</p>
+            <h3 class="text-2xl font-bold mb-2 text-[#ce2b47] title-font">Acceso Staff</h3>
+            <p class="text-slate-400 text-sm mb-8 MontserratLight">Uso exclusivo del personal</p>
             <input type="password" id="adminPin" placeholder="PIN" maxlength="4"
                 class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-4 text-center text-3xl tracking-[0.8em] focus:border-[#f9af53] outline-none mb-6">
             <div class="flex flex-col gap-3">
                 <button onclick="checkPin()"
-                    class="w-full py-4 bg-[#f9af53] text-black rounded-xl font-black text-lg hover:bg-white transition-all">ACCEDER</button>
+                    class="btn-primary w-full py-4 text-lg">ACCEDER</button>
                 <button onclick="closeLogin()"
                     class="w-full py-2 text-slate-500 hover:text-white transition-all text-sm">CANCELAR</button>
             </div>
@@ -209,9 +209,8 @@ require_once __DIR__ . '/db.php';
         <button onclick="sendReaction('🔥')" class="reaction-btn" title="¡Fuego!">🔥</button>
         <button onclick="sendReaction('❤️')" class="reaction-btn" title="Me encanta">❤️</button>
         <button onclick="sendReaction('😂')" class="reaction-btn" title="¡Jaja!">😂</button>
-        <button onclick="sendReaction('�')" class="reaction-btn" title="¡Me muero!">🤣</button>
         <button onclick="sendReaction('🤩')" class="reaction-btn" title="¡Crack!">🤩</button>
-        <button onclick="sendReaction('�')" class="reaction-btn" title="¡Qué fuerte!">😱</button>
+        <button onclick="sendReaction('😱')" class="reaction-btn" title="¡Qué fuerte!">😱</button>
         <button onclick="sendReaction('🙉')" class="reaction-btn" title="¡Mis oídos!">🙉</button>
         <button onclick="sendReaction('🍅')" class="reaction-btn" title="¡Tomatazo!">🍅</button>
     </div>
