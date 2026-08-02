@@ -15,6 +15,10 @@ function loadEnv(string $path): void
         return;
     }
     foreach ($vars as $name => $value) {
+        // Las variables de entorno reales tienen prioridad sobre el archivo .env
+        if (getenv($name) !== false) {
+            continue;
+        }
         putenv("$name=$value");
         $_ENV[$name] = $value;
     }

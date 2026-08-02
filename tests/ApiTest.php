@@ -71,11 +71,16 @@ final class ApiTest extends KaraokeTestCase
     {
         $client = $this->client();
 
-        for ($i = 1; $i <= 5; $i++) {
+        for ($i = 1; $i <= 4; $i++) {
             $res = $client->post('/api.php?action=login', ['pin' => '9999']);
             $this->assertFalse($res['success']);
             $this->assertStringContainsString('restantes', $res['message']);
         }
+
+        // El 5º intento agota el límite
+        $res = $client->post('/api.php?action=login', ['pin' => '9999']);
+        $this->assertFalse($res['success']);
+        $this->assertStringContainsString('bloqueado', $res['message']);
 
         $res = $client->post('/api.php?action=login', ['pin' => '9999']);
         $this->assertFalse($res['success']);
@@ -234,9 +239,14 @@ final class ApiTest extends KaraokeTestCase
 
         $queue = $client->get('/api.php?action=get_queue');
         $this->assertCount(8, $queue['queue']);
+        $ordered = array_map('intval', array_column($queue['queue'], 'id'));
 
-        // sort_order debe ser secuencial y único (1..8)
-        $orders = array_column($queue['queue'], 'sort_order');
-        $this->assertSame(range(1, 8), array_map('intval', $orders));
+        // IDs únicos (sin duplicados ni pérdidas)
+        $this->assertSame($ids, array_values(array_intersect($ids, $ordered)));
+        $this->assertCount(8, array_unique($ordered));
+
+        // Los novatos (u7, u8) se adelantan: quedan antes de u6
+        $expected = array_merge(array_slice($ids, 0, 5), [$ids[6], $ids[7], $ids[5]]);
+        $this->assertSame($expected, $ordered);
     }
 }

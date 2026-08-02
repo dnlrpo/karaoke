@@ -263,10 +263,8 @@ switch ($action) {
             }
         }
 
-        // Insert newbies at position 5 (6th place)
-        foreach ($newbies as $newbie) {
-            array_splice($others, 5, 0, [$newbie]);
-        }
+        // Insert newbies at position 5 (6th place), preserving their order
+        array_splice($others, 5, 0, $newbies);
 
         $reordered = $others;
 
