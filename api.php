@@ -67,6 +67,7 @@ switch ($action) {
                                        (time() - $_SESSION['access_code_time']) < 28800, // 8 hours
             'reactions' => $stmtReactions->fetchAll(),
             'csrf_token' => csrfToken(),
+            'initial_admin_pin' => $_SESSION['initial_admin_pin'] ?? null,
         ];
         break;
 
@@ -149,6 +150,7 @@ switch ($action) {
             session_regenerate_id(true);
             $_SESSION['admin_auth'] = true;
             $_SESSION['login_attempts'] = 0; // Reset attempts on success
+            unset($_SESSION['initial_admin_pin']); // El PIN inicial ya no se muestra
             $response = ['success' => true, 'message' => 'Acceso Staff Concedido'];
         } else {
             $_SESSION['login_attempts']++;

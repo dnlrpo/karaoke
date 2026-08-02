@@ -207,6 +207,10 @@ function checkDefaultAdmin(PDO $pdo): void
     $hash = password_hash($pin, PASSWORD_DEFAULT);
     $stmt = $pdo->prepare("INSERT INTO admins (username, password_hash) VALUES ('staff', ?)");
     $stmt->execute([$hash]);
+
+    // Deja el PIN visible en la sesión hasta el primer login
+    secureSessionStart();
+    $_SESSION['initial_admin_pin'] = $pin;
     error_log("[karaoke] Admin 'staff' creado. PIN inicial: {$pin} — cámbialo desde el panel.");
 }
 

@@ -46,10 +46,19 @@ async function fetchQueue() {
                 createReactionParticle(reaction.emoji);
                 lastReactionId = Math.max(lastReactionId, reaction.id);
             });
+            showInitialPin(data.initial_admin_pin);
         }
     } catch (error) {
         console.error("Error fetching queue:", error);
     }
+}
+
+let initialPinShown = false;
+
+function showInitialPin(pin) {
+    if (!pin || initialPinShown) return;
+    initialPinShown = true;
+    showToast(`PIN inicial de staff: ${pin} — cámbialo en Configuración de Hoy`);
 }
 
 async function sendReaction(emoji) {
