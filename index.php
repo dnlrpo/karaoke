@@ -53,46 +53,66 @@ sendSecurityHeaders();
                     <h2 class="text-xl font-bold mb-6 flex items-center gap-2 text-white">
                         <i class="fas fa-play-circle text-[#f9af53]"></i> <span class="text-[#329bac]">Pide tu Turno</span>
                     </h2>
-                    <form id="karaokeForm" class="space-y-4">
-                        <div>
-                            <label
-                                class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Nombre
-                                / Alias</label>
-                            <input type="text" id="userName" required placeholder="¿Cómo te llamamos?"
-                                class="input-field w-full rounded-xl px-4 py-3 transition-all">
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
+                    <form id="karaokeForm" class="space-y-4" novalidate>
+                        <!-- Paso 1: nombre + código de la noche -->
+                        <div id="identityStep" class="space-y-4">
                             <div>
                                 <label
-                                    class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Canción</label>
-                                <input type="text" id="songTitle" required placeholder="Título"
+                                    class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Nombre
+                                    / Alias</label>
+                                <input type="text" id="userName" required maxlength="60" autocomplete="name"
+                                    placeholder="¿Cómo te llamamos?"
                                     class="input-field w-full rounded-xl px-4 py-3 transition-all">
                             </div>
                             <div>
                                 <label
-                                    class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Artista</label>
-                                <input type="text" id="artistName" required placeholder="Artista"
-                                    class="input-field w-full rounded-xl px-4 py-3 transition-all">
+                                    class="text-[10px] uppercase tracking-widest text-[#f9af53] font-bold mb-1 block">Código
+                                    de la Noche</label>
+                                <input type="text" id="accessCode" required maxlength="32" autocomplete="off"
+                                    autocapitalize="characters" placeholder="Ingresa el código del local"
+                                    class="input-field w-full rounded-xl px-4 py-3 transition-all border-[#f9af53]/30">
                             </div>
-                        </div>
-                        <div id="accessCodeField" class="pt-2">
-                            <label
-                                class="text-[10px] uppercase tracking-widest text-[#f9af53] font-bold mb-1 block">Código
-                                de la Noche</label>
-                            <input type="text" id="accessCode" placeholder="Ingresa el código del local"
-                                class="input-field w-full rounded-xl px-4 py-3 transition-all border-[#f9af53]/30">
-                        </div>
-                        <div id="accessCodeValidated" class="pt-2 hidden">
-                            <div class="bg-[#329bac]/10 border border-[#329bac]/30 rounded-xl px-4 py-3 flex items-center gap-2">
-                                <i class="fas fa-check-circle text-[#329bac]"></i>
-                                <span class="text-sm text-[#329bac] font-bold">Código validado ✓</span>
-                            </div>
+                            <p id="identityError" class="hidden text-sm font-bold text-[#ce2b47]"></p>
+                            <button type="submit"
+                                class="btn-primary w-full py-4 rounded-xl font-bold text-lg shadow-xl active:scale-95 mt-2">
+                                Continuar
+                            </button>
                         </div>
 
-                        <button type="submit"
-                            class="btn-primary w-full py-4 rounded-xl font-bold text-lg shadow-xl active:scale-95 mt-2">
-                            Anotarme en la lista
-                        </button>
+                        <!-- Paso 2: canción (solo tras validar el código) -->
+                        <div id="songStep" class="hidden space-y-4">
+                            <div
+                                class="bg-[#329bac]/10 border border-[#329bac]/30 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-check-circle text-[#329bac]"></i>
+                                    <span id="participantName" class="text-sm font-bold text-white break-all"></span>
+                                    <span
+                                        class="text-[10px] uppercase tracking-widest text-[#329bac] font-black">Código
+                                        validado</span>
+                                </div>
+                                <button type="button" id="changeParticipant"
+                                    class="text-xs text-slate-400 hover:text-white transition-all">Cambiar</button>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label
+                                        class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Canción</label>
+                                    <input type="text" id="songTitle" maxlength="120" placeholder="Título"
+                                        class="input-field w-full rounded-xl px-4 py-3 transition-all">
+                                </div>
+                                <div>
+                                    <label
+                                        class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Artista</label>
+                                    <input type="text" id="artistName" maxlength="80" placeholder="Artista"
+                                        class="input-field w-full rounded-xl px-4 py-3 transition-all">
+                                </div>
+                            </div>
+                            <p id="songError" class="hidden text-sm font-bold text-[#ce2b47]"></p>
+                            <button type="submit"
+                                class="btn-primary w-full py-4 rounded-xl font-bold text-lg shadow-xl active:scale-95 mt-2">
+                                Anotarme en la lista
+                            </button>
+                        </div>
                     </form>
                     <div id="registrationClosedMessage" class="hidden text-center py-8">
                         <i class="fas fa-lock text-slate-500 text-4xl mb-4"></i>

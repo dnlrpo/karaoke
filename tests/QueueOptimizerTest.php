@@ -89,6 +89,44 @@ final class QueueOptimizerTest extends PHPUnit\Framework\TestCase
         }
     }
 
+    public function testSameNameDifferentIdentityCanStayTogether(): void
+    {
+        // Dos "Ana" distintas (singer_key distinto) no deben separarse por nombre
+        $queue = [
+            ['id' => 1, 'user_name' => 'Ana', 'singer_key' => 'p:1'],
+            ['id' => 2, 'user_name' => 'Ana', 'singer_key' => 'p:2'],
+            ['id' => 3, 'user_name' => 'Beto', 'singer_key' => 'p:3'],
+            ['id' => 4, 'user_name' => 'Carla', 'singer_key' => 'p:4'],
+        ];
+
+        $this->assertSame([1, 2, 3, 4], $this->ids(QueueOptimizer::optimize($queue, [])));
+    }
+
+    public function testSameSingerKeyIsSeparated(): void
+    {
+        // La misma identidad sí se separa aunque cambie el nombre visible
+        $queue = [
+            ['id' => 1, 'user_name' => 'Ana', 'singer_key' => 'p:1'],
+            ['id' => 2, 'user_name' => 'Ana', 'singer_key' => 'p:1'],
+            ['id' => 3, 'user_name' => 'Beto', 'singer_key' => 'p:2'],
+            ['id' => 4, 'user_name' => 'Carla', 'singer_key' => 'p:3'],
+        ];
+
+        $this->assertSame([1, 3, 4, 2], $this->ids(QueueOptimizer::optimize($queue, [])));
+    }
+
+    public function testFinishedCountsUseSingerKey(): void
+    {
+        $queue = [];
+        for ($i = 1; $i <= 8; $i++) {
+            $queue[] = ['id' => $i, 'user_name' => "u$i", 'singer_key' => "p:$i"];
+        }
+
+        $finished = ['p:1' => 1, 'p:2' => 1, 'p:3' => 1, 'p:4' => 1, 'p:5' => 1, 'p:6' => 1];
+
+        $this->assertSame([1, 2, 3, 4, 5, 7, 8, 6], $this->ids(QueueOptimizer::optimize($queue, $finished)));
+    }
+
     public function testRepeatedSingerIsNotBackToBack(): void
     {
         $queue = $this->queue(['Ana', 'Beto', 'Ana', 'Beto', 'Ana', 'Beto', 'Ana', 'Beto', 'Ana', 'Beto']);

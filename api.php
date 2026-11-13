@@ -6,6 +6,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/src/QueueOptimizer.php';
+require_once __DIR__ . '/src/Participant.php';
 
 secureSessionStart();
 sendSecurityHeaders();
@@ -35,6 +36,8 @@ const ROUTES = [
     'health'              => ['GET', false],
     'get_queue'           => ['GET', false],
     'get_reactions'       => ['GET', false],
+    'validate_code'       => ['POST', false],
+    'reset_participant'   => ['POST', false],
     'add_to_queue'        => ['POST', false],
     'send_reaction'       => ['POST', false],
     'login'               => ['POST', false],
@@ -123,8 +126,13 @@ function activeQueueSize(PDO $pdo): int
  * Inserta un turno al final de la cola de forma atómica.
  * El FOR UPDATE serializa el cálculo de sort_order entre registros concurrentes.
  */
-function insertSongInQueue(PDO $pdo, string $userName, string $songTitle, string $artistName): void
-{
+function insertSongInQueue(
+    PDO $pdo,
+    string $userName,
+    string $songTitle,
+    string $artistName,
+    ?int $participantId
+): int {
     $pdo->beginTransaction();
     try {
         $stmt = $pdo->prepare(
@@ -137,11 +145,14 @@ function insertSongInQueue(PDO $pdo, string $userName, string $songTitle, string
         $nextOrder = $maxOrder === false ? 1 : (int)$maxOrder + 1;
 
         $stmt = $pdo->prepare(
-            "INSERT INTO songs (user_name, song_title, artist_name, sort_order) VALUES (?, ?, ?, ?)"
+            "INSERT INTO songs (user_name, song_title, artist_name, sort_order, participant_id)
+             VALUES (?, ?, ?, ?, ?)"
         );
-        $stmt->execute([$userName, $songTitle, $artistName, $nextOrder]);
+        $stmt->execute([$userName, $songTitle, $artistName, $nextOrder, $participantId]);
+        $id = (int)$pdo->lastInsertId();
 
         $pdo->commit();
+        return $id;
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
@@ -217,6 +228,7 @@ try {
             cleanupReactions($pdo);
 
             $admin = isAdmin($pdo);
+            $participant = Participant::fromSession();
 
             jsonResponse([
                 'success' => true,
@@ -224,13 +236,53 @@ try {
                 'night_code' => $admin ? getNightCode($pdo) : null,
                 'is_admin' => $admin,
                 'registration_enabled' => $registrationEnabled,
-                'access_code_validated' => isset($_SESSION['access_code_validated']) &&
-                                           isset($_SESSION['access_code_time']) &&
-                                           (time() - $_SESSION['access_code_time']) < 28800, // 8 hours
+                'access_code_validated' => $participant !== null,
+                'participant_name' => $participant['name'] ?? null,
                 'reactions' => $stmtReactions->fetchAll(),
                 'csrf_token' => csrfToken(),
                 'initial_admin_pin' => $_SESSION['initial_admin_pin'] ?? null,
             ]);
+
+        case 'validate_code':
+            $data = readJsonBody();
+            $name = requireText($data, 'userName', 'nombre', MAX_NAME);
+            $code = strtoupper(inputString($data, 'accessCode'));
+
+            // Solo tiene sentido validar si el registro está abierto
+            $stmtReg = $pdo->prepare("SELECT `value` FROM settings WHERE `key` = 'registration_enabled'");
+            $stmtReg->execute();
+            $regResult = $stmtReg->fetch();
+            if ($regResult === false || !(bool)$regResult['value']) {
+                fail('El registro está cerrado en este momento', 403);
+            }
+
+            $ip = clientIp();
+            if (rateLimitCount($pdo, 'validate_ip', $ip, 900) >= 10) {
+                fail('Demasiados intentos. Intente más tarde.', 429);
+            }
+
+            $nightCode = getNightCode($pdo);
+            if ($nightCode === '' || !hash_equals($nightCode, $code)) {
+                rateLimitIncrement($pdo, 'validate_ip', $ip, 900);
+                fail('Código de local incorrecto', 403);
+            }
+            rateLimitReset($pdo, 'validate_ip', $ip);
+
+            $participant = Participant::identify($pdo, $name);
+            Participant::attachToSession($participant);
+            refreshSessionCookie(time() + Participant::TTL);
+
+            jsonResponse([
+                'success' => true,
+                'message' => 'Código validado',
+                'participant_name' => $participant['name'],
+                'expires_in' => Participant::TTL,
+            ]);
+
+        case 'reset_participant':
+            Participant::clearSession();
+            Participant::clearCookie();
+            jsonResponse(['success' => true, 'message' => 'Identidad borrada']);
 
         case 'add_to_queue':
             $data = readJsonBody();
@@ -245,10 +297,13 @@ try {
                 fail('El registro está cerrado en este momento', 403);
             }
 
-            $user_name = requireText($data, 'userName', 'nombre', MAX_NAME);
+            $participant = Participant::fromSession();
+            if ($participant === null) {
+                fail('Valida el código de la noche primero', 403);
+            }
+
             $song_title = requireText($data, 'songTitle', 'canción', MAX_SONG);
             $artist_name = requireText($data, 'artistName', 'artista', MAX_ARTIST);
-            $access_code = strtoupper(inputString($data, 'accessCode'));
 
             // Rate limit: por sesión (anti-spam) y por IP (red de seguridad para NAT)
             $sessionKey = 'sess:' . session_id();
@@ -265,28 +320,18 @@ try {
                 fail('La lista está completa. Pide al staff que la vacíe.', 409);
             }
 
-            // Check session for access code validation
-            $codeValidated = isset($_SESSION['access_code_validated']) &&
-                             isset($_SESSION['access_code_time']) &&
-                             (time() - $_SESSION['access_code_time']) < 28800; // 8 hours
-
-            if (!$codeValidated) {
-                $nightCode = getNightCode($pdo);
-                if ($nightCode === '' || !hash_equals($nightCode, $access_code)) {
-                    fail('Código de local incorrecto', 403);
-                }
-                // Save to session
-                $_SESSION['access_code_validated'] = true;
-                $_SESSION['access_code_time'] = time();
-            }
-
             // Insert at the end of the active queue (atomic sort_order)
-            insertSongInQueue($pdo, $user_name, $song_title, $artist_name);
+            $songId = insertSongInQueue($pdo, $participant['name'], $song_title, $artist_name, $participant['id']);
 
             rateLimitIncrement($pdo, 'register_session', $sessionKey, RL_REGISTER_WINDOW);
             rateLimitIncrement($pdo, 'register_ip', $ip, RL_REGISTER_IP_WINDOW);
 
-            jsonResponse(['success' => true, 'message' => 'Registrado con éxito']);
+            jsonResponse([
+                'success' => true,
+                'message' => 'Registrado con éxito',
+                'id' => $songId,
+                'position' => activeQueueSize($pdo),
+            ]);
 
         case 'login':
             $data = readJsonBody();
@@ -315,6 +360,7 @@ try {
 
             if ($admin !== false && password_verify($pin, $admin['password_hash'])) {
                 session_regenerate_id(true);
+                refreshSessionCookie(0); // el staff vuelve a cookie de navegador
                 $_SESSION['admin_auth'] = true;
                 $_SESSION['auth_epoch'] = authEpoch($pdo, true);
                 $_SESSION['login_attempts'] = 0;
@@ -394,7 +440,7 @@ try {
 
         case 'auto_reorder':
             // 1. Get current waiting queue
-            $stmt = $pdo->prepare("SELECT id, user_name FROM songs WHERE status = 'waiting' ORDER BY sort_order ASC, id ASC");
+            $stmt = $pdo->prepare("SELECT id, user_name, participant_id FROM songs WHERE status = 'waiting' ORDER BY sort_order ASC, id ASC");
             $stmt->execute();
             $queue = $stmt->fetchAll();
 
@@ -402,22 +448,26 @@ try {
                 fail('No hay canciones en espera', 409);
             }
 
-            // 2. Identify new singers (0 finished songs)
-            $usersInQueue = array_unique(array_column($queue, 'user_name'));
-            $stats = [];
-            if (!empty($usersInQueue)) {
-                $placeholders = implode(',', array_fill(0, count($usersInQueue), '?'));
-                $stmtStats = $pdo->prepare("SELECT user_name, COUNT(*) as finished_count FROM songs WHERE status = 'finished' AND created_at >= NOW() - INTERVAL 12 HOUR AND user_name IN ($placeholders) GROUP BY user_name");
-                $stmtStats->execute(array_values($usersInQueue));
-                $statsResult = $stmtStats->fetchAll();
-                foreach ($statsResult as $row) {
-                    $stats[$row['user_name']] = (int)$row['finished_count'];
-                }
+            // Identidad para el reordenamiento: participant_id si existe;
+            // las filas antiguas (NULL) siguen agrupándose por nombre.
+            foreach ($queue as &$song) {
+                $song['singer_key'] = $song['participant_id'] !== null
+                    ? 'p:' . $song['participant_id']
+                    : 'n:' . $song['user_name'];
             }
+            unset($song);
 
-            // Fill missing users with 0
-            foreach ($usersInQueue as $user) {
-                $stats[$user] ??= 0;
+            // 2. Canciones terminadas en las últimas 12 h, por identidad
+            $stats = [];
+            $stmtStats = $pdo->query("SELECT participant_id, user_name, COUNT(*) AS finished_count FROM songs WHERE status = 'finished' AND created_at >= NOW() - INTERVAL 12 HOUR GROUP BY participant_id, user_name");
+            foreach ($stmtStats as $row) {
+                $key = $row['participant_id'] !== null
+                    ? 'p:' . $row['participant_id']
+                    : 'n:' . $row['user_name'];
+                $stats[$key] = ($stats[$key] ?? 0) + (int)$row['finished_count'];
+            }
+            foreach ($queue as $song) {
+                $stats[$song['singer_key']] ??= 0;
             }
 
             // 3-4. Optimizar la cola (lógica pura, testeada sin BD)

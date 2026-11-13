@@ -48,7 +48,8 @@ FLUSH PRIVILEGES;
 ```
 
 > Si se migra desde la versión anterior: la estructura es compatible y los datos se conservan.
-> La migración v2 añade la tabla `rate_limits` y la v3 los índices de cola y reacciones.
+> La migración v2 añade la tabla `rate_limits`, la v3 los índices de cola y reacciones, y la v4
+> la tabla `participants` y la columna `songs.participant_id`.
 
 ## 4. Primer arranque
 
@@ -120,12 +121,14 @@ DELETE FROM reactions WHERE created_at < NOW() - INTERVAL 1 HOUR;
 - [ ] `php -v` ≥ 8.4 y `pdo_mysql` cargado
 - [ ] `.env` con credenciales correctas y `chmod 600`
 - [ ] Primer request sin errores en el log de PHP
-- [ ] `schema_version` = 3 en `settings`
+- [ ] `schema_version` = 4 en `settings`
 - [ ] PIN inicial cambiado (y las sesiones de staff anteriores invalidadas)
 - [ ] `/bin/`, `/tests/` y `/vendor/` responden 403/404 (no 200)
 - [ ] Login: 15 fallos desde la misma IP quedan bloqueados 15 minutos (tabla `rate_limits`)
 - [ ] La respuesta HTML incluye `Content-Security-Policy` con `script-src 'self'`
 - [ ] `GET /api.php?action=health` responde 200 con `{"status":"ok"}`
+- [ ] El participante valida nombre + código una vez y puede anotar varias canciones
+- [ ] La cookie `karaoke_pid` se emite `HttpOnly` y dura 12 h
 - [ ] Assets cargan sin CDN (cortar internet y recargar)
 - [ ] Cola, reacciones y panel admin funcionan en móvil y desktop
 - [ ] HTTPS activo (la sesión se marca `Secure` automáticamente)

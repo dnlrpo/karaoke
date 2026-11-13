@@ -15,6 +15,8 @@ final class ApiTest extends KaraokeTestCase
         $this->assertIsString($res['csrf_token']);
         $this->assertGreaterThanOrEqual(32, strlen($res['csrf_token']));
         $this->assertIsArray($res['reactions']);
+        $this->assertSame(false, $res['access_code_validated']);
+        $this->assertNull($res['participant_name']);
     }
 
     public function testHealthEndpoint(): void
@@ -28,54 +30,91 @@ final class ApiTest extends KaraokeTestCase
         $this->assertIsString($res['time']);
     }
 
-    public function testAddToQueueRequiresAllFields(): void
+    public function testAddSongRequiresSongAndArtist(): void
     {
-        $res = $this->client()->post('/api.php?action=add_to_queue', [
-            'userName' => 'Solo nombre',
+        $client = $this->participant('Ana');
+
+        $res = $client->post('/api.php?action=add_to_queue', [
             'songTitle' => '',
             'artistName' => '',
         ]);
 
+        $this->assertSame(422, $res['_http_status']);
         $this->assertFalse($res['success']);
         $this->assertSame('Faltan campos obligatorios', $res['message']);
     }
 
-    public function testAddToQueueRejectsWrongCode(): void
+    public function testAddWithoutValidationIsRejected(): void
     {
         $res = $this->client()->post('/api.php?action=add_to_queue', [
-            'userName' => 'Invitado',
             'songTitle' => 'Canción',
             'artistName' => 'Artista',
+        ]);
+
+        $this->assertSame(403, $res['_http_status']);
+        $this->assertFalse($res['success']);
+        $this->assertStringContainsString('Valida el código', $res['message']);
+    }
+
+    public function testValidateCodeRejectsWrongCode(): void
+    {
+        $res = $this->client()->post('/api.php?action=validate_code', [
+            'userName' => 'Invitado',
             'accessCode' => 'INCORRECTO',
         ]);
 
+        $this->assertSame(403, $res['_http_status']);
         $this->assertFalse($res['success']);
         $this->assertSame('Código de local incorrecto', $res['message']);
     }
 
-    public function testAddToQueueValidatesCodeOncePerSession(): void
+    public function testValidateCodeRateLimit(): void
     {
         $client = $this->client();
 
-        // Código correcto, case-insensitive
-        $res = $client->post('/api.php?action=add_to_queue', [
-            'userName' => 'Ana',
-            'songTitle' => 'Despacito',
-            'artistName' => 'Luis Fonsi',
-            'accessCode' => 'trilla24',
-        ]);
-        $this->assertTrue($res['success']);
+        for ($i = 1; $i <= 10; $i++) {
+            $res = $client->post('/api.php?action=validate_code', [
+                'userName' => 'Invitado',
+                'accessCode' => 'MAL',
+            ]);
+            $this->assertSame(403, $res['_http_status']);
+        }
 
-        // Segundo registro sin código (validado en sesión por 8h)
-        $res = $client->post('/api.php?action=add_to_queue', [
-            'userName' => 'Luis',
-            'songTitle' => 'Otra canción',
-            'artistName' => 'Otro artista',
+        $res = $client->post('/api.php?action=validate_code', [
+            'userName' => 'Invitado',
+            'accessCode' => 'MAL',
+        ]);
+
+        $this->assertSame(429, $res['_http_status']);
+        $this->assertStringContainsString('Demasiados intentos', $res['message']);
+    }
+
+    public function testValidateCodeOnceAndAddSeveralSongs(): void
+    {
+        $client = $this->client();
+
+        $res = $client->post('/api.php?action=validate_code', [
+            'userName' => 'Ana',
+            'accessCode' => 'trilla24', // case-insensitive
         ]);
         $this->assertTrue($res['success']);
+        $this->assertSame('Ana', $res['participant_name']);
+
+        $first = $this->addSong($client, 'Despacito', 'Luis Fonsi');
+        $this->assertTrue($first['success']);
+        $this->assertSame(1, $first['position']);
+        $this->assertIsInt($first['id']);
+
+        // Ya no hace falta código ni nombre: la sesión recuerda a la persona
+        $second = $this->addSong($client, 'Otra canción', 'Otro artista');
+        $this->assertTrue($second['success']);
+        $this->assertSame(2, $second['position']);
 
         $queue = $client->get('/api.php?action=get_queue');
         $this->assertCount(2, $queue['queue']);
+        $this->assertSame('Ana', $queue['participant_name']);
+        $this->assertTrue($queue['access_code_validated']);
+        $this->assertSame(['Ana', 'Ana'], array_column($queue['queue'], 'user_name'));
     }
 
     public function testLoginRateLimitBlocksAfterFiveAttempts(): void
@@ -131,7 +170,7 @@ final class ApiTest extends KaraokeTestCase
     {
         $client = $this->client();
         $csrf = $this->loginAdmin($client);
-        $ids = $this->addToQueue($client, 3);
+        $ids = $this->addParticipants(3);
 
         $res = $client->post('/api.php?action=reorder_queue', ['orderedIds' => $ids], $this->csrfHeader($csrf));
         $this->assertTrue($res['success']);
@@ -146,7 +185,7 @@ final class ApiTest extends KaraokeTestCase
     {
         $client = $this->client();
         $csrf = $this->loginAdmin($client);
-        $ids = $this->addToQueue($client, 3);
+        $ids = $this->addParticipants(3);
 
         $reversed = array_reverse($ids);
         $res = $client->post('/api.php?action=reorder_queue', ['orderedIds' => $reversed], $this->csrfHeader($csrf));
@@ -160,7 +199,7 @@ final class ApiTest extends KaraokeTestCase
     {
         $client = $this->client();
         $csrf = $this->loginAdmin($client);
-        [$id] = $this->addToQueue($client, 1);
+        [$id] = $this->addParticipants(1);
 
         $res = $client->post('/api.php?action=remove_from_queue', ['id' => $id], $this->csrfHeader($csrf));
         $this->assertTrue($res['success']);
@@ -194,13 +233,11 @@ final class ApiTest extends KaraokeTestCase
         $res = $client->post('/api.php?action=toggle_registration', ['enabled' => false], $this->csrfHeader($csrf));
         $this->assertTrue($res['success']);
 
-        $res = $client->post('/api.php?action=add_to_queue', [
+        $res = $this->client()->post('/api.php?action=validate_code', [
             'userName' => 'Tarde',
-            'songTitle' => 'Nada',
-            'artistName' => 'Nadie',
             'accessCode' => 'TRILLA24',
         ]);
-        $this->assertFalse($res['success']);
+        $this->assertSame(403, $res['_http_status']);
         $this->assertStringContainsString('registro está cerrado', $res['message']);
     }
 
@@ -243,7 +280,7 @@ final class ApiTest extends KaraokeTestCase
     {
         $client = $this->client();
         $csrf = $this->loginAdmin($client);
-        $ids = $this->addToQueue($client, 8);
+        $ids = $this->addParticipants(8);
 
         $res = $client->post('/api.php?action=auto_reorder', null, $this->csrfHeader($csrf));
         $this->assertTrue($res['success']);

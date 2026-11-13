@@ -89,6 +89,7 @@ css/input.css            # Fuente de Tailwind (@source directives)
 api.php                  # REST API (acciones separadas por ?action=)
 db.php                   # Conexión, sesión segura, migraciones
 src/QueueOptimizer.php   # Lógica pura de optimización de la cola
+src/Participant.php      # Identidad anónima (cookie + sesión)
 index.php                # UI
 .github/workflows/ci.yml # CI (PHP 8.4 + MySQL 8.4)
 tests/                   # PHPUnit (integración + unitarios)
@@ -101,7 +102,9 @@ Endpoints principales (todas las respuestas son JSON):
 | Acción | Método | Descripción |
 |---|---|---|
 | `get_queue` | GET | Cola activa + estado global + reacciones nuevas (`&since={id}`) + CSRF token |
-| `add_to_queue` | POST | Registrar participante (valida código diario) |
+| `validate_code` | POST | Valida nombre + código y recuerda al participante 12 h |
+| `reset_participant` | POST | Borra la identidad del dispositivo (cambio de persona) |
+| `add_to_queue` | POST | Añadir canción (requiere código ya validado; usa el nombre de la sesión) |
 | `send_reaction` | POST | Enviar emoji (whitelist + rate limit 15/30s) |
 | `login` | POST | Login staff (rate limit 5 intentos / 5 min) |
 | `logout` | POST | Cerrar sesión (requiere CSRF) |
@@ -126,6 +129,11 @@ junto con `{"success": false, "message": "..."}`.
 - CSRF en todas las acciones administrativas
 - PIN hasheado con `password_hash` (bcrypt); PIN inicial aleatorio, nunca `1234`
 - Cambiar el PIN invalida el resto de sesiones de staff (`auth_epoch` en `settings`)
+- Identidad anónima de participante: cookie `karaoke_pid` `HttpOnly` (12 h) con token aleatorio;
+  en BD solo se guarda su hash. El código de la noche nunca se guarda en el cliente
+- Al validar el código, la cookie de sesión también se reemite a 12 h; el login de staff
+  vuelve a cookie de navegador (no queda una sesión de admin persistente)
+- Rate limit en la validación del código: 10 fallos/15 min por IP
 - Rate limiting persistido en BD: login (5 fallos/5 min por sesión, 15/15 min por IP),
   registro (12/10 min por sesión, 150/h por IP) y reacciones (15/30 s por sesión)
 - La IP del cliente se toma de `REMOTE_ADDR`; `X-Forwarded-For` solo se acepta desde `TRUSTED_PROXIES`
@@ -135,6 +143,8 @@ junto con `{"success": false, "message": "..."}`.
 - Cabeceras `X-Content-Type-Options`, `Referrer-Policy` y `X-Frame-Options` enviadas desde PHP
 - Inserción de turnos transaccional (`SELECT ... FOR UPDATE`) para no duplicar posiciones
 - Índices en `songs(status, sort_order)` y `reactions(created_at)` (migración v3)
+- Reordenamiento por identidad (`participants.id`), no por nombre: dos personas con el
+  mismo nombre no se mezclan (migración v4)
 - SQL preparado en todas las consultas; escape de salida en el frontend
 - Reacciones antiguas se purgan automáticamente (> 1 hora, probabilístico); para purga inmediata programar un cron:
 

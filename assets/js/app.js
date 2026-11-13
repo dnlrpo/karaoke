@@ -3,7 +3,7 @@ let isAdmin = false;
 let nightCode = "";
 let currentQueue = [];
 let registrationEnabled = null;
-let accessCodeValidated = null;
+let participantName = undefined;
 let lastReactionId = 0;
 let csrfToken = "";
 let lastQueueSignature = "";
@@ -41,10 +41,14 @@ async function fetchQueue() {
             updateRegistrationUI();
         }
 
-        const validatedNow = data.access_code_validated === true;
-        if (validatedNow !== accessCodeValidated) {
-            accessCodeValidated = validatedNow;
-            updateAccessCodeUI();
+        const nameNow = data.participant_name || null;
+        if (nameNow !== participantName) {
+            const hadName = Boolean(participantName);
+            participantName = nameNow;
+            applyParticipantState();
+            if (hadName && !nameNow) {
+                showToast('Tu sesión expiró. Valida el código de nuevo.', 'error');
+            }
         }
 
         if (data.csrf_token) csrfToken = data.csrf_token;
@@ -202,23 +206,111 @@ async function toggleRegistration() {
     }
 }
 
-function updateAccessCodeUI() {
-    const accessCodeField = document.getElementById('accessCodeField');
-    const accessCodeValidatedDiv = document.getElementById('accessCodeValidated');
-    const accessCodeInput = document.getElementById('accessCode');
+/**
+ * Alterna entre el paso de identidad (nombre + código) y el de canción.
+ */
+function applyParticipantState() {
+    const identityStep = document.getElementById('identityStep');
+    const songStep = document.getElementById('songStep');
+    const nameEl = document.getElementById('participantName');
 
-    if (accessCodeValidated) {
-        accessCodeField.classList.add('hidden');
-        accessCodeValidatedDiv.classList.remove('hidden');
-        if (accessCodeInput) {
-            accessCodeInput.removeAttribute('required');
-        }
+    if (participantName) {
+        nameEl.textContent = participantName;
+        identityStep.classList.add('hidden');
+        songStep.classList.remove('hidden');
     } else {
-        accessCodeField.classList.remove('hidden');
-        accessCodeValidatedDiv.classList.add('hidden');
-        if (accessCodeInput) {
-            accessCodeInput.setAttribute('required', 'required');
+        identityStep.classList.remove('hidden');
+        songStep.classList.add('hidden');
+    }
+}
+
+function setFieldError(id, message) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = message || '';
+    el.classList.toggle('hidden', !message);
+}
+
+async function validateCode() {
+    setFieldError('identityError', '');
+    const name = document.getElementById('userName').value.trim();
+    const code = document.getElementById('accessCode').value.trim().toUpperCase();
+
+    if (!name) {
+        setFieldError('identityError', 'Escribe tu nombre');
+        document.getElementById('userName').focus();
+        return;
+    }
+    if (!code) {
+        setFieldError('identityError', 'Escribe el código de la noche');
+        document.getElementById('accessCode').focus();
+        return;
+    }
+
+    try {
+        const response = await fetch('api.php?action=validate_code', {
+            method: 'POST',
+            headers: adminFetchHeaders(),
+            body: JSON.stringify({ userName: name, accessCode: code })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            setFieldError('identityError', data.message || 'No se pudo validar el código');
+            return;
         }
+
+        participantName = data.participant_name;
+        applyParticipantState();
+        document.getElementById('songTitle').focus();
+        showToast('Código validado');
+    } catch (error) {
+        setFieldError('identityError', 'Error de conexión');
+    }
+}
+
+async function addSong() {
+    setFieldError('songError', '');
+    const song = document.getElementById('songTitle').value.trim();
+    const artist = document.getElementById('artistName').value.trim();
+
+    if (!song) {
+        setFieldError('songError', 'Escribe la canción');
+        document.getElementById('songTitle').focus();
+        return;
+    }
+    if (!artist) {
+        setFieldError('songError', 'Escribe el artista');
+        document.getElementById('artistName').focus();
+        return;
+    }
+
+    try {
+        const response = await fetch('api.php?action=add_to_queue', {
+            method: 'POST',
+            headers: adminFetchHeaders(),
+            body: JSON.stringify({ songTitle: song, artistName: artist })
+        });
+        const data = await response.json();
+
+        if (!data.success) {
+            if (response.status === 403) {
+                participantName = null;
+                applyParticipantState();
+                setFieldError('identityError', data.message || 'Valida el código de la noche');
+                return;
+            }
+            setFieldError('songError', data.message || 'No se pudo anotar la canción');
+            return;
+        }
+
+        document.getElementById('songTitle').value = '';
+        document.getElementById('artistName').value = '';
+        showToast(data.position ? `Estás en el turno #${data.position}` : data.message);
+        fetchQueue();
+        document.getElementById('songTitle').focus();
+    } catch (error) {
+        setFieldError('songError', 'Error de conexión');
     }
 }
 
@@ -504,32 +596,36 @@ async function removeFromQueue(id) {
     }
 }
 
-form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const payload = {
-        userName: document.getElementById('userName').value,
-        songTitle: document.getElementById('songTitle').value,
-        artistName: document.getElementById('artistName').value,
-        accessCode: accessCodeValidated ? '' : document.getElementById('accessCode').value
-    };
+form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (participantName) {
+        addSong();
+    } else {
+        validateCode();
+    }
+});
+
+document.getElementById('changeParticipant').addEventListener('click', async () => {
+    if (!confirm("¿Otra persona va a cantar desde este dispositivo?")) return;
 
     try {
-        const response = await fetch('api.php?action=add_to_queue', {
+        const response = await fetch('api.php?action=reset_participant', {
             method: 'POST',
-            headers: adminFetchHeaders(),
-            body: JSON.stringify(payload)
+            headers: adminFetchHeaders()
         });
         const data = await response.json();
-        if (data.success) {
-            fetchQueue();
-            form.reset();
-            showToast(data.message);
-        } else {
+
+        if (!data.success) {
             showToast(data.message, "error");
-            if (data.message.includes("Código")) {
-                document.getElementById('accessCode').focus();
-            }
+            return;
         }
+
+        participantName = null;
+        applyParticipantState();
+        document.getElementById('userName').value = '';
+        document.getElementById('accessCode').value = '';
+        document.getElementById('userName').focus();
+        fetchQueue();
     } catch (error) {
         showToast("Error de conexión", "error");
     }

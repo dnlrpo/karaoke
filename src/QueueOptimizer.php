@@ -23,9 +23,9 @@ final class QueueOptimizer
     public const DEFAULT_MAX_GAP = 4;
 
     /**
-     * @param list<array{id:int|string, user_name:string}> $queue
-     * @param array<string,int> $finishedCounts Canciones terminadas por participante
-     * @return list<array{id:int|string, user_name:string}>
+     * @param list<array{id:int|string, user_name:string, singer_key?:string}> $queue
+     * @param array<string,int> $finishedCounts Canciones terminadas por clave de cantante
+     * @return list<array{id:int|string, user_name:string, singer_key?:string}>
      */
     public static function optimize(
         array $queue,
@@ -44,7 +44,7 @@ final class QueueOptimizer
         $newbies = [];
         $others = [];
         foreach ($queue as $index => $song) {
-            $finished = (int)($finishedCounts[$song['user_name']] ?? 0);
+            $finished = (int)($finishedCounts[self::key($song)] ?? 0);
             if ($finished === 0 && $index >= $bumpAt) {
                 $newbies[] = $song;
             } else {
@@ -65,7 +65,7 @@ final class QueueOptimizer
             $song = $pool[$index];
 
             $final[] = $song;
-            array_unshift($history, $song['user_name']);
+            array_unshift($history, self::key($song));
             if (count($history) > $maxGap) {
                 array_pop($history);
             }
@@ -80,23 +80,33 @@ final class QueueOptimizer
      * Siguiente canción: la primera cuyo cantante no esté en la ventana;
      * si no hay, la primera que no sea la última en cantar; si no, la primera.
      *
-     * @param list<array{user_name:string}> $pool
+     * @param list<array{user_name:string, singer_key?:string}> $pool
      * @param list<string> $history
      */
     private static function nextIndex(array $pool, array $history): int
     {
         foreach ($pool as $index => $song) {
-            if (!in_array($song['user_name'], $history, true)) {
+            if (!in_array(self::key($song), $history, true)) {
                 return $index;
             }
         }
 
         foreach ($pool as $index => $song) {
-            if ($history === [] || $song['user_name'] !== $history[0]) {
+            if ($history === [] || self::key($song) !== $history[0]) {
                 return $index;
             }
         }
 
         return 0;
+    }
+
+    /**
+     * Clave de identidad: participant_id si viene, nombre para filas antiguas.
+     *
+     * @param array{user_name:string, singer_key?:string} $song
+     */
+    private static function key(array $song): string
+    {
+        return (string)($song['singer_key'] ?? $song['user_name']);
     }
 }

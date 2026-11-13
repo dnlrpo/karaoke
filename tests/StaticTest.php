@@ -58,8 +58,10 @@ final class StaticTest extends KaraokeTestCase
 
     public function testQueuePositionsAreSequential(): void
     {
-        $client = $this->client();
-        $this->addToQueue($client, 3);
+        $client = $this->participant('Ana');
+        $this->assertTrue($this->addSong($client, 'Canción 1')['success']);
+        $this->assertTrue($this->addSong($client, 'Canción 2')['success']);
+        $this->assertTrue($this->addSong($client, 'Canción 3')['success']);
 
         $positions = $this->db()
             ->query("SELECT sort_order FROM songs WHERE status = 'waiting' ORDER BY sort_order, id")

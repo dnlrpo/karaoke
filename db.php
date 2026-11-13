@@ -48,7 +48,10 @@ try {
 }
 
 /** Bump this constant when the schema changes to trigger pending migrations */
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
+
+/** Ventana de validación del participante y vida de su cookie (12 h). */
+const PARTICIPANT_TTL = 43200;
 
 /**
  * Identificador corto de la petición, para correlacionar logs y respuestas.
@@ -87,6 +90,15 @@ function sendSecurityHeaders(): void
 }
 
 /**
+ * Whether the current request arrived over HTTPS (directly or behind a proxy).
+ */
+function isHttpsRequest(): bool
+{
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+}
+
+/**
  * Start a hardened session (HttpOnly, SameSite, Secure on HTTPS).
  */
 function secureSessionStart(): void
@@ -94,8 +106,9 @@ function secureSessionStart(): void
     if (session_status() === PHP_SESSION_ACTIVE) {
         return;
     }
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    $https = isHttpsRequest();
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.gc_maxlifetime', (string)PARTICIPANT_TTL);
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
@@ -105,6 +118,23 @@ function secureSessionStart(): void
         'samesite' => 'Lax',
     ]);
     session_start();
+}
+
+/**
+ * Reemite la cookie de sesión con la caducidad indicada (0 = solo navegador).
+ */
+function refreshSessionCookie(int $expires): void
+{
+    if (PHP_SAPI === 'cli' || session_status() !== PHP_SESSION_ACTIVE) {
+        return;
+    }
+    setcookie(session_name(), session_id(), [
+        'expires' => $expires,
+        'path' => '/',
+        'secure' => isHttpsRequest(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
 }
 
 /**
@@ -333,6 +363,35 @@ function initDatabase(PDO $pdo): void
                 if ((int)$exists->fetchColumn() === 0) {
                     $pdo->exec("CREATE INDEX `{$index}` ON `{$table}` {$columns}");
                 }
+            }
+        },
+        4 => static function (PDO $pdo): void {
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS participants (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    token_hash CHAR(64) NOT NULL UNIQUE,
+                    name VARCHAR(60) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
+
+            $column = $pdo->prepare(
+                "SELECT COUNT(*) FROM information_schema.columns
+                 WHERE table_schema = DATABASE() AND table_name = 'songs' AND column_name = 'participant_id'"
+            );
+            $column->execute();
+            if ((int)$column->fetchColumn() === 0) {
+                $pdo->exec("ALTER TABLE songs ADD COLUMN participant_id INT NULL");
+            }
+
+            $index = $pdo->prepare(
+                "SELECT COUNT(*) FROM information_schema.statistics
+                 WHERE table_schema = DATABASE() AND table_name = 'songs' AND index_name = 'idx_songs_participant'"
+            );
+            $index->execute();
+            if ((int)$index->fetchColumn() === 0) {
+                $pdo->exec("CREATE INDEX idx_songs_participant ON songs (participant_id)");
             }
         },
     ];

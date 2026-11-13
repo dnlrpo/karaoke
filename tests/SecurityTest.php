@@ -4,16 +4,6 @@ declare(strict_types=1);
 
 final class SecurityTest extends KaraokeTestCase
 {
-    private function register(TestClient $client, string $name, string $code = 'TRILLA24'): array
-    {
-        return $client->post('/api.php?action=add_to_queue', [
-            'userName' => $name,
-            'songTitle' => 'Canción de ' . $name,
-            'artistName' => 'Artista',
-            'accessCode' => $code,
-        ]);
-    }
-
     public function testGetQueueRejectsPost(): void
     {
         $res = $this->client()->post('/api.php?action=get_queue');
@@ -47,16 +37,20 @@ final class SecurityTest extends KaraokeTestCase
 
     public function testLongFieldsAreRejected(): void
     {
-        $res = $this->client()->post('/api.php?action=add_to_queue', [
+        $res = $this->client()->post('/api.php?action=validate_code', [
             'userName' => str_repeat('a', 61),
-            'songTitle' => 'Canción',
-            'artistName' => 'Artista',
             'accessCode' => 'TRILLA24',
         ]);
 
         $this->assertSame(422, $res['_http_status']);
         $this->assertFalse($res['success']);
         $this->assertStringContainsString('60', $res['message']);
+
+        $client = $this->participant('Ana');
+        $res = $this->addSong($client, str_repeat('b', 121));
+
+        $this->assertSame(422, $res['_http_status']);
+        $this->assertStringContainsString('120', $res['message']);
     }
 
     public function testQueueLimitRejectsWhenFull(): void
@@ -69,7 +63,8 @@ final class SecurityTest extends KaraokeTestCase
             $stmt->execute(["Usuario $i", "Canción $i", "Artista $i", $i]);
         }
 
-        $res = $this->register($this->client(), 'Tarde');
+        $client = $this->participant('Tarde');
+        $res = $this->addSong($client, 'Canción');
 
         $this->assertSame(409, $res['_http_status']);
         $this->assertStringContainsString('completa', $res['message']);
@@ -79,7 +74,7 @@ final class SecurityTest extends KaraokeTestCase
     {
         $client = $this->client();
         $csrf = $this->loginAdmin($client);
-        $ids = $this->addToQueue($client, 2);
+        $ids = $this->addParticipants(2);
 
         $res = $client->post(
             '/api.php?action=reorder_queue',
@@ -93,14 +88,14 @@ final class SecurityTest extends KaraokeTestCase
 
     public function testRegistrationRateLimitPerSession(): void
     {
-        $client = $this->client();
+        $client = $this->participant('Persona');
 
         for ($i = 1; $i <= 12; $i++) {
-            $res = $this->register($client, "Persona $i");
+            $res = $this->addSong($client, "Canción $i");
             $this->assertTrue($res['success'], "Registro $i falló: " . ($res['message'] ?? ''));
         }
 
-        $res = $this->register($client, 'Persona 13');
+        $res = $this->addSong($client, 'Canción 13');
 
         $this->assertSame(429, $res['_http_status']);
         $this->assertStringContainsString('Demasiados registros', $res['message']);

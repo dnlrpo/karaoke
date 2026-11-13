@@ -187,6 +187,7 @@ function resetTestDatabase(): void
     $pdo->exec('DELETE FROM songs');
     $pdo->exec('DELETE FROM reactions');
     $pdo->exec('DELETE FROM rate_limits');
+    $pdo->exec('DELETE FROM participants');
     $pdo->exec("UPDATE settings SET `value` = '1' WHERE `key` = 'registration_enabled'");
     $pdo->exec("REPLACE INTO settings (`key`, `value`) VALUES ('night_code', 'TRILLA24')");
     $pdo->exec("REPLACE INTO settings (`key`, `value`) VALUES ('auth_epoch', '0')");

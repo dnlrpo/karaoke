@@ -50,21 +50,45 @@ abstract class KaraokeTestCase extends PHPUnit\Framework\TestCase
     }
 
     /**
-     * Registra N participantes en la cola (con código) y devuelve sus IDs.
+     * Crea un participante validado con su propia sesión y cookie.
      */
-    protected function addToQueue(TestClient $client, int $count): array
+    protected function participant(string $name, string $code = 'TRILLA24'): TestClient
+    {
+        $client = $this->client();
+        $res = $client->post('/api.php?action=validate_code', [
+            'userName' => $name,
+            'accessCode' => $code,
+        ]);
+        $this->assertTrue($res['success'], 'validate_code falló: ' . ($res['message'] ?? ''));
+        return $client;
+    }
+
+    /**
+     * Añade una canción desde una sesión de participante ya validada.
+     *
+     * @return array<string,mixed>
+     */
+    protected function addSong(TestClient $client, string $title, string $artist = 'Artista'): array
+    {
+        return $client->post('/api.php?action=add_to_queue', [
+            'songTitle' => $title,
+            'artistName' => $artist,
+        ]);
+    }
+
+    /**
+     * Crea N participantes distintos, con una canción cada uno.
+     *
+     * @return list<int> IDs de las canciones en orden de inserción
+     */
+    protected function addParticipants(int $count): array
     {
         $ids = [];
         for ($i = 1; $i <= $count; $i++) {
-            $res = $client->post('/api.php?action=add_to_queue', [
-                'userName' => "Usuario $i",
-                'songTitle' => "Canción $i",
-                'artistName' => "Artista $i",
-                'accessCode' => 'TRILLA24',
-            ]);
+            $client = $this->participant("Usuario $i");
+            $res = $this->addSong($client, "Canción $i", "Artista $i");
             $this->assertTrue($res['success'], 'add_to_queue falló: ' . ($res['message'] ?? ''));
-            $queue = $client->get('/api.php?action=get_queue');
-            $ids[] = (int)$queue['queue'][array_key_last($queue['queue'])]['id'];
+            $ids[] = (int)$res['id'];
         }
         return $ids;
     }
