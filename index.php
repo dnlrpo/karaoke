@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
+
+sendSecurityHeaders();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -111,7 +113,7 @@ require_once __DIR__ . '/db.php';
                             <div class="flex flex-col sm:flex-row gap-2 mb-3">
                                 <input type="text" id="newNightCode" placeholder="Nuevo código"
                                     class="input-field flex-grow rounded-lg px-3 py-2 text-sm">
-                                <button onclick="updateNightCode()"
+                                <button type="button" data-action="update-night-code"
                                     class="btn-primary px-4 py-2 rounded-lg text-xs whitespace-nowrap">
                                     CAMBIAR
                                 </button>
@@ -128,7 +130,7 @@ require_once __DIR__ . '/db.php';
                             <div class="flex flex-col sm:flex-row gap-2">
                                 <input type="password" id="newStaffPin" placeholder="Nuevo PIN" maxlength="4"
                                     class="input-field flex-grow rounded-lg px-3 py-2 text-sm text-center tracking-[0.3em] min-w-0">
-                                <button onclick="updateStaffPin()"
+                                <button type="button" data-action="update-staff-pin"
                                     class="btn-primary px-4 py-2 rounded-lg text-xs whitespace-nowrap">
                                     GUARDAR
                                 </button>
@@ -140,7 +142,7 @@ require_once __DIR__ . '/db.php';
                             <div class="flex items-center justify-between">
                                 <label class="text-xs text-slate-400">Habilitar Registro:</label>
                                 <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" id="registrationToggle" class="sr-only peer" onchange="toggleRegistration()">
+                                    <input type="checkbox" id="registrationToggle" class="sr-only peer" role="switch" aria-label="Habilitar registro">
                                     <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#f9af53] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#329bac]"></div>
                                 </label>
                             </div>
@@ -164,12 +166,11 @@ require_once __DIR__ . '/db.php';
                                 class="bg-[#ce2b47] text-[10px] px-2 py-1 rounded-md font-black uppercase">0</span>
                         </h2>
                         <div class="flex items-center gap-3">
-                            <button id="autoReorder"
-                                class="text-slate-500 hover:text-[#f9af53] text-sm transition-colors hidden admin-only-inline"
-                                onclick="autoReorderQueue()">
+                            <button id="autoReorder" type="button" data-action="auto-reorder"
+                                class="text-slate-500 hover:text-[#f9af53] text-sm transition-colors hidden admin-only-inline">
                                 <i class="fas fa-magic mr-1"></i> Optimizar Cola
                             </button>
-                            <button id="clearAll"
+                            <button id="clearAll" type="button"
                                 class="text-slate-500 hover:text-[#ce2b47] text-sm transition-colors hidden admin-only-inline">
                                 <i class="fas fa-trash-can mr-1"></i> Reiniciar Todo
                             </button>
@@ -196,9 +197,9 @@ require_once __DIR__ . '/db.php';
             <input type="password" id="adminPin" placeholder="PIN" maxlength="4"
                 class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-4 text-center text-3xl tracking-[0.8em] focus:border-[#f9af53] outline-none mb-6">
             <div class="flex flex-col gap-3">
-                <button onclick="checkPin()"
+                <button type="button" data-action="login"
                     class="btn-primary w-full py-4 text-lg">ACCEDER</button>
-                <button onclick="closeLogin()"
+                <button type="button" data-action="close-login"
                     class="w-full py-2 text-slate-500 hover:text-white transition-all text-sm">CANCELAR</button>
             </div>
         </div>
@@ -206,14 +207,14 @@ require_once __DIR__ . '/db.php';
 
     <!-- Reaction Panel -->
     <div id="reactionPanel" class="reaction-panel hidden-panel">
-        <button onclick="sendReaction('👏')" class="reaction-btn" title="¡Bravo!">👏</button>
-        <button onclick="sendReaction('🔥')" class="reaction-btn" title="¡Fuego!">🔥</button>
-        <button onclick="sendReaction('❤️')" class="reaction-btn" title="Me encanta">❤️</button>
-        <button onclick="sendReaction('😂')" class="reaction-btn" title="¡Jaja!">😂</button>
-        <button onclick="sendReaction('🤩')" class="reaction-btn" title="¡Crack!">🤩</button>
-        <button onclick="sendReaction('😱')" class="reaction-btn" title="¡Qué fuerte!">😱</button>
-        <button onclick="sendReaction('🙉')" class="reaction-btn" title="¡Mis oídos!">🙉</button>
-        <button onclick="sendReaction('🍅')" class="reaction-btn" title="¡Tomatazo!">🍅</button>
+        <button type="button" data-action="reaction" data-emoji="👏" class="reaction-btn" title="¡Bravo!">👏</button>
+        <button type="button" data-action="reaction" data-emoji="🔥" class="reaction-btn" title="¡Fuego!">🔥</button>
+        <button type="button" data-action="reaction" data-emoji="❤️" class="reaction-btn" title="Me encanta">❤️</button>
+        <button type="button" data-action="reaction" data-emoji="😂" class="reaction-btn" title="¡Jaja!">😂</button>
+        <button type="button" data-action="reaction" data-emoji="🤩" class="reaction-btn" title="¡Crack!">🤩</button>
+        <button type="button" data-action="reaction" data-emoji="😱" class="reaction-btn" title="¡Qué fuerte!">😱</button>
+        <button type="button" data-action="reaction" data-emoji="🙉" class="reaction-btn" title="¡Mis oídos!">🙉</button>
+        <button type="button" data-action="reaction" data-emoji="🍅" class="reaction-btn" title="¡Tomatazo!">🍅</button>
     </div>
 
     <!-- Toast Feedback -->

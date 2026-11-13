@@ -48,7 +48,7 @@ FLUSH PRIVILEGES;
 ```
 
 > Si se migra desde la versión anterior: la estructura es compatible y los datos se conservan.
-> La migración v2 añade la tabla `rate_limits` para los límites de peticiones.
+> La migración v2 añade la tabla `rate_limits` y la v3 los índices de cola y reacciones.
 
 ## 4. Primer arranque
 
@@ -91,12 +91,12 @@ location ~ ^/(composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml\.dist|AGI
 location ~ /\.(env|git)        { deny all; }
 location /                     { try_files $uri $uri/ /index.php?$query_string; }
 autoindex off;
-
-add_header X-Content-Type-Options nosniff always;
-add_header Referrer-Policy strict-origin-when-cross-origin always;
-add_header X-Frame-Options DENY always;
 ```
 
+> Las cabeceras de seguridad (incluida la CSP) las envía la aplicación desde PHP, así que no
+> hace falta duplicarlas con `add_header`. La CSP permite el logo remoto de
+> `latrillacultural.com`; si algún día se quita esa dependencia, ajusta la cabecera en `db.php`.
+>
 > Con proxy o CDN delante, define `TRUSTED_PROXIES` en el `.env` con la IP del proxy.
 > Sin eso, todos los clientes comparten la IP del proxy y el rate limit por IP los agrupa.
 
@@ -120,10 +120,11 @@ DELETE FROM reactions WHERE created_at < NOW() - INTERVAL 1 HOUR;
 - [ ] `php -v` ≥ 8.4 y `pdo_mysql` cargado
 - [ ] `.env` con credenciales correctas y `chmod 600`
 - [ ] Primer request sin errores en el log de PHP
-- [ ] `schema_version` = 2 en `settings`
+- [ ] `schema_version` = 3 en `settings`
 - [ ] PIN inicial cambiado (y las sesiones de staff anteriores invalidadas)
 - [ ] `/bin/`, `/tests/` y `/vendor/` responden 403/404 (no 200)
 - [ ] Login: 15 fallos desde la misma IP quedan bloqueados 15 minutos (tabla `rate_limits`)
+- [ ] La respuesta HTML incluye `Content-Security-Policy` con `script-src 'self'`
 - [ ] Assets cargan sin CDN (cortar internet y recargar)
 - [ ] Cola, reacciones y panel admin funcionan en móvil y desktop
 - [ ] HTTPS activo (la sesión se marca `Secure` automáticamente)

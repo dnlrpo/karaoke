@@ -48,7 +48,30 @@ try {
 }
 
 /** Bump this constant when the schema changes to trigger pending migrations */
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
+
+/**
+ * Security headers for every response. They are sent from PHP so they work the
+ * same behind Apache, nginx or the built-in server. The CSP allows the remote
+ * logo used by the empty-queue state.
+ */
+function sendSecurityHeaders(): void
+{
+    if (PHP_SAPI === 'cli') {
+        return;
+    }
+
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('X-Frame-Options: DENY');
+    header(
+        "Content-Security-Policy: default-src 'self'; " .
+        "img-src 'self' data: https://latrillacultural.com; " .
+        "style-src 'self'; script-src 'self'; font-src 'self'; " .
+        "connect-src 'self'; frame-ancestors 'none'; " .
+        "base-uri 'none'; form-action 'self'"
+    );
+}
 
 /**
  * Start a hardened session (HttpOnly, SameSite, Secure on HTTPS).
@@ -281,6 +304,23 @@ function initDatabase(PDO $pdo): void
                     KEY idx_rate_limits_window (window_start)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             ");
+        },
+        3 => static function (PDO $pdo): void {
+            // MySQL no soporta CREATE INDEX IF NOT EXISTS: comprobamos primero
+            $indexes = [
+                ['songs', 'idx_songs_status_sort', '(status, sort_order)'],
+                ['reactions', 'idx_reactions_created', '(created_at)'],
+            ];
+            $exists = $pdo->prepare(
+                "SELECT COUNT(*) FROM information_schema.statistics
+                 WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?"
+            );
+            foreach ($indexes as [$table, $index, $columns]) {
+                $exists->execute([$table, $index]);
+                if ((int)$exists->fetchColumn() === 0) {
+                    $pdo->exec("CREATE INDEX `{$index}` ON `{$table}` {$columns}");
+                }
+            }
         },
     ];
 

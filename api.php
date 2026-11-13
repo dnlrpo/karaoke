@@ -7,6 +7,7 @@ header('Cache-Control: no-store');
 require_once __DIR__ . '/db.php';
 
 secureSessionStart();
+sendSecurityHeaders();
 
 /** Máximo de turnos activos (espera + cantando). */
 const MAX_QUEUE = 80;
@@ -114,6 +115,37 @@ function activeQueueSize(PDO $pdo): int
 {
     return (int)$pdo->query("SELECT COUNT(*) FROM songs WHERE status IN ('waiting', 'singing')")
         ->fetchColumn();
+}
+
+/**
+ * Inserta un turno al final de la cola de forma atómica.
+ * El FOR UPDATE serializa el cálculo de sort_order entre registros concurrentes.
+ */
+function insertSongInQueue(PDO $pdo, string $userName, string $songTitle, string $artistName): void
+{
+    $pdo->beginTransaction();
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT sort_order FROM songs
+             WHERE status IN ('waiting', 'singing')
+             ORDER BY sort_order DESC LIMIT 1 FOR UPDATE"
+        );
+        $stmt->execute();
+        $maxOrder = $stmt->fetchColumn();
+        $nextOrder = $maxOrder === false ? 1 : (int)$maxOrder + 1;
+
+        $stmt = $pdo->prepare(
+            "INSERT INTO songs (user_name, song_title, artist_name, sort_order) VALUES (?, ?, ?, ?)"
+        );
+        $stmt->execute([$userName, $songTitle, $artistName, $nextOrder]);
+
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
 }
 
 /**
@@ -230,14 +262,8 @@ try {
                 $_SESSION['access_code_time'] = time();
             }
 
-            // Calculate new sort_order
-            $stmtMax = $pdo->prepare("SELECT MAX(sort_order) as max_order FROM songs WHERE status IN ('waiting', 'singing')");
-            $stmtMax->execute();
-            $maxOrder = $stmtMax->fetchColumn();
-            $newSortOrder = ($maxOrder !== false && $maxOrder !== null) ? (int)$maxOrder + 1 : 1;
-
-            $stmt = $pdo->prepare("INSERT INTO songs (user_name, song_title, artist_name, sort_order) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$user_name, $song_title, $artist_name, $newSortOrder]);
+            // Insert at the end of the active queue (atomic sort_order)
+            insertSongInQueue($pdo, $user_name, $song_title, $artist_name);
 
             rateLimitIncrement($pdo, 'register_session', $sessionKey, RL_REGISTER_WINDOW);
             rateLimitIncrement($pdo, 'register_ip', $ip, RL_REGISTER_IP_WINDOW);

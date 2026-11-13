@@ -124,6 +124,11 @@ junto con `{"success": false, "message": "..."}`.
   registro (12/10 min por sesión, 150/h por IP) y reacciones (15/30 s por sesión)
 - La IP del cliente se toma de `REMOTE_ADDR`; `X-Forwarded-For` solo se acepta desde `TRUSTED_PROXIES`
 - Límites de longitud en todos los campos del formulario y tope de 80 turnos en la cola
+- CSP estricta (`script-src 'self'`, sin `unsafe-inline`) con delegación de eventos en el frontend;
+  permite el logo remoto de `latrillacultural.com`
+- Cabeceras `X-Content-Type-Options`, `Referrer-Policy` y `X-Frame-Options` enviadas desde PHP
+- Inserción de turnos transaccional (`SELECT ... FOR UPDATE`) para no duplicar posiciones
+- Índices en `songs(status, sort_order)` y `reactions(created_at)` (migración v3)
 - SQL preparado en todas las consultas; escape de salida en el frontend
 - Reacciones antiguas se purgan automáticamente (> 1 hora, probabilístico); para purga inmediata programar un cron:
 

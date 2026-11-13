@@ -2,10 +2,12 @@ let sortableInstance = null;
 let isAdmin = false;
 let nightCode = "";
 let currentQueue = [];
-let registrationEnabled = true;
-let accessCodeValidated = false;
+let registrationEnabled = null;
+let accessCodeValidated = null;
 let lastReactionId = 0;
 let csrfToken = "";
+let lastQueueSignature = "";
+let isDragging = false;
 const sentReactionIds = new Set();
 
 const form = document.getElementById('karaokeForm');
@@ -26,31 +28,61 @@ async function fetchQueue() {
     try {
         const response = await fetch(`api.php?action=get_queue&since=${lastReactionId}`);
         const data = await response.json();
-        if (data.success) {
+        if (!data.success) return;
+
+        const adminNow = data.is_admin === true;
+        if (adminNow !== isAdmin) {
+            isAdmin = adminNow;
+            updateUIForAdmin();
+        }
+
+        if (data.registration_enabled !== registrationEnabled) {
+            registrationEnabled = data.registration_enabled;
+            updateRegistrationUI();
+        }
+
+        const validatedNow = data.access_code_validated === true;
+        if (validatedNow !== accessCodeValidated) {
+            accessCodeValidated = validatedNow;
+            updateAccessCodeUI();
+        }
+
+        if (data.csrf_token) csrfToken = data.csrf_token;
+
+        if (isAdmin && data.night_code && data.night_code !== nightCode) {
+            nightCode = data.night_code;
+            codeLabel.innerText = nightCode;
+        }
+
+        // Solo se repinta la cola cuando cambia algo, y nunca mientras se arrastra
+        const signature = queueSignature(data.queue, adminNow);
+        if (signature !== lastQueueSignature && !isDragging) {
+            lastQueueSignature = signature;
             currentQueue = data.queue;
             renderQueue(data.queue);
-            isAdmin = data.is_admin;
-            registrationEnabled = data.registration_enabled;
-            accessCodeValidated = data.access_code_validated || false;
-            if (data.csrf_token) csrfToken = data.csrf_token;
-            updateUIForAdmin();
-            updateRegistrationUI();
-            updateAccessCodeUI();
-            if (isAdmin && data.night_code) {
-                nightCode = data.night_code;
-                codeLabel.innerText = nightCode;
-            }
-            // Render only reactions we have not sent ourselves
-            (data.reactions || []).forEach(reaction => {
-                if (sentReactionIds.has(reaction.id)) return;
-                createReactionParticle(reaction.emoji);
-                lastReactionId = Math.max(lastReactionId, reaction.id);
-            });
-            showInitialPin(data.initial_admin_pin);
         }
+
+        // Render only reactions we have not sent ourselves
+        (data.reactions || []).forEach(reaction => {
+            if (sentReactionIds.has(reaction.id)) return;
+            createReactionParticle(reaction.emoji);
+            lastReactionId = Math.max(lastReactionId, reaction.id);
+        });
+        showInitialPin(data.initial_admin_pin);
     } catch (error) {
         console.error("Error fetching queue:", error);
     }
+}
+
+/**
+ * Huella de la cola: evita reconstruir el DOM (y destruir el drag & drop)
+ * en cada poll cuando no ha cambiado nada.
+ */
+function queueSignature(queue, admin) {
+    return JSON.stringify([
+        admin === true,
+        queue.map(item => [item.id, item.user_name, item.song_title, item.artist_name]),
+    ]);
 }
 
 let initialPinShown = false;
@@ -307,6 +339,7 @@ function showToast(msg, type = "success") {
 }
 
 function renderQueue(queue) {
+    const scrollTop = queueList.scrollTop;
     queueList.innerHTML = '';
     queueBadge.innerText = queue.length;
 
@@ -320,11 +353,13 @@ function renderQueue(queue) {
     if (queue.length === 0) {
         queueList.innerHTML = `
             <div class="flex flex-col items-center justify-center py-20 opacity-20 text-center px-10">
-                <img src="https://latrillacultural.com/img/logo-circular.webp" class="w-32 h-32 mb-6 grayscale">
+                <img src="https://latrillacultural.com/img/logo-circular.webp" alt="Logo La Trilla" class="w-32 h-32 mb-6 grayscale">
                 <p class="text-xl font-bold title-font text-[#ce2b47]">Lista Vacía</p>
                 <p class="text-sm">Ingresa el código del local para anotarte.</p>
             </div>
         `;
+        setupSortable();
+        queueList.scrollTop = scrollTop;
         return;
     }
 
@@ -338,7 +373,7 @@ function renderQueue(queue) {
                 <div class="drag-handle cursor-move text-slate-500 hover:text-white transition-colors p-2">
                     <i class="fas fa-bars"></i>
                 </div>
-                <button onclick="removeFromQueue(${item.id})" class="flex items-center gap-2 px-4 py-2 bg-[#ce2b47]/20 text-[#ce2b47] hover:bg-[#ce2b47] hover:text-white rounded-xl transition-all font-bold text-xs ml-2">
+                <button type="button" data-action="remove" data-id="${item.id}" class="flex items-center gap-2 px-4 py-2 bg-[#ce2b47]/20 text-[#ce2b47] hover:bg-[#ce2b47] hover:text-white rounded-xl transition-all font-bold text-xs ml-2">
                     <i class="fas fa-check"></i> LISTO
                 </button>
             </div>
@@ -368,22 +403,33 @@ function renderQueue(queue) {
         queueList.appendChild(div);
     });
 
+    setupSortable();
+    queueList.scrollTop = scrollTop;
+}
+
+/**
+ * Crea SortableJS una sola vez por sesión de admin (el contenedor no cambia)
+ * y lo destruye al salir del modo staff.
+ */
+function setupSortable() {
     if (isAdmin) {
-        if (sortableInstance) sortableInstance.destroy();
+        if (sortableInstance) return;
         sortableInstance = new Sortable(queueList, {
             animation: 150,
             handle: '.drag-handle',
             ghostClass: 'bg-white/10',
-            onEnd: function (evt) {
+            onStart: () => {
+                isDragging = true;
+            },
+            onEnd: () => {
+                isDragging = false;
                 const newOrderIds = Array.from(queueList.children).map(el => el.getAttribute('data-id'));
                 updateOrder(newOrderIds);
             }
         });
-    } else {
-        if (sortableInstance) {
-            sortableInstance.destroy();
-            sortableInstance = null;
-        }
+    } else if (sortableInstance) {
+        sortableInstance.destroy();
+        sortableInstance = null;
     }
 }
 
@@ -418,10 +464,12 @@ async function updateOrder(orderedIds) {
         const data = await response.json();
         if (!data.success) {
             showToast(data.message, "error");
+            lastQueueSignature = ""; // fuerza el repintado al revertir
             fetchQueue(); // Revert
         }
     } catch (error) {
         showToast("Error de conexión", "error");
+        lastQueueSignature = "";
         fetchQueue();
     }
 }
@@ -490,6 +538,46 @@ document.getElementById('clearAll').addEventListener('click', async () => {
         } catch (error) {
             showToast("Error de conexión", "error");
         }
+    }
+});
+
+// Delegación de eventos: el HTML solo lleva data-action (compatible con CSP
+// sin 'unsafe-inline' y sin handlers inline en index.php).
+document.addEventListener('click', (event) => {
+    const target = event.target.closest('[data-action]');
+    if (!target) return;
+
+    switch (target.dataset.action) {
+        case 'update-night-code':
+            updateNightCode();
+            break;
+        case 'update-staff-pin':
+            updateStaffPin();
+            break;
+        case 'auto-reorder':
+            autoReorderQueue();
+            break;
+        case 'login':
+            checkPin();
+            break;
+        case 'close-login':
+            closeLogin();
+            break;
+        case 'reaction':
+            sendReaction(target.dataset.emoji);
+            break;
+        case 'remove':
+            removeFromQueue(Number(target.dataset.id));
+            break;
+    }
+});
+
+document.getElementById('registrationToggle').addEventListener('change', toggleRegistration);
+
+document.getElementById('adminPin').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        checkPin();
     }
 });
 

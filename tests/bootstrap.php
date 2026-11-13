@@ -33,9 +33,22 @@ final class TestClient
 {
     private string $jar;
 
+    /** @var array<string,string> */
+    private array $lastHeaders = [];
+
     public function __construct()
     {
         $this->jar = sys_get_temp_dir() . '/karaoke_test_' . bin2hex(random_bytes(6)) . '.txt';
+    }
+
+    /**
+     * Cabeceras de la última respuesta (nombres en minúsculas).
+     *
+     * @return array<string,string>
+     */
+    public function lastHeaders(): array
+    {
+        return $this->lastHeaders;
     }
 
     public function get(string $path, array $headers = []): array
@@ -51,6 +64,14 @@ final class TestClient
     private function request(string $method, string $path, ?array $body, array $headers): array
     {
         $ch = curl_init(KARAOKE_BASE_URL . $path);
+        $responseHeaders = [];
+        curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($ch, string $line) use (&$responseHeaders): int {
+            $parts = explode(':', $line, 2);
+            if (count($parts) === 2) {
+                $responseHeaders[strtolower(trim($parts[0]))] = trim($parts[1]);
+            }
+            return strlen($line);
+        });
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 10,
@@ -74,6 +95,7 @@ final class TestClient
         }
         $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
+        $this->lastHeaders = $responseHeaders;
         $decoded = json_decode($raw, true);
         if (!is_array($decoded)) {
             throw new RuntimeException('Respuesta no JSON: ' . substr($raw, 0, 200));
