@@ -93,19 +93,17 @@ sendSecurityHeaders();
                                 <button type="button" id="changeParticipant"
                                     class="text-xs text-slate-400 hover:text-white transition-all">Cambiar</button>
                             </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label
-                                        class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Canción</label>
-                                    <input type="text" id="songTitle" maxlength="120" placeholder="Título"
-                                        class="input-field w-full rounded-xl px-4 py-3 transition-all">
-                                </div>
-                                <div>
-                                    <label
-                                        class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Artista</label>
-                                    <input type="text" id="artistName" maxlength="80" placeholder="Artista"
-                                        class="input-field w-full rounded-xl px-4 py-3 transition-all">
-                                </div>
+                            <div>
+                                <label
+                                    class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Canción</label>
+                                <input type="text" id="songTitle" maxlength="120" placeholder="Título"
+                                    class="input-field w-full rounded-xl px-4 py-3 transition-all">
+                            </div>
+                            <div>
+                                <label
+                                    class="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1 block">Artista</label>
+                                <input type="text" id="artistName" maxlength="80" placeholder="Artista"
+                                    class="input-field w-full rounded-xl px-4 py-3 transition-all">
                             </div>
                             <p id="songError" class="hidden text-sm font-bold text-[#ce2b47]"></p>
                             <button type="submit"
@@ -146,9 +144,9 @@ sendSecurityHeaders();
 
                         <!-- Cambio de PIN -->
                         <div class="pt-4 border-t border-white/5">
-                            <label class="text-xs text-slate-400 mb-1 block">Cambiar PIN Staff (4 dígitos):</label>
+                            <label class="text-xs text-slate-400 mb-1 block">Cambiar PIN Staff (6 dígitos):</label>
                             <div class="flex flex-col sm:flex-row gap-2">
-                                <input type="password" id="newStaffPin" placeholder="Nuevo PIN" maxlength="4"
+                                <input type="password" id="newStaffPin" placeholder="Nuevo PIN (6 dígitos)" maxlength="6"
                                     class="input-field flex-grow rounded-lg px-3 py-2 text-sm text-center tracking-[0.3em] min-w-0">
                                 <button type="button" data-action="update-staff-pin"
                                     class="btn-primary px-4 py-2 rounded-lg text-xs whitespace-nowrap">
@@ -214,7 +212,7 @@ sendSecurityHeaders();
                 alt="Logo">
             <h3 class="text-2xl font-bold mb-2 text-[#ce2b47] title-font">Acceso Staff</h3>
             <p class="text-slate-400 text-sm mb-8 MontserratLight">Uso exclusivo del personal</p>
-            <input type="password" id="adminPin" placeholder="PIN" maxlength="4"
+            <input type="password" id="adminPin" placeholder="PIN" maxlength="6"
                 class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-4 text-center text-3xl tracking-[0.8em] focus:border-[#f9af53] outline-none mb-6">
             <div class="flex flex-col gap-3">
                 <button type="button" data-action="login"

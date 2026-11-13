@@ -341,8 +341,8 @@ async function updateNightCode() {
 
 async function updateStaffPin() {
     const val = document.getElementById('newStaffPin').value.trim();
-    if (val.length !== 4 || isNaN(val)) {
-        showToast("El PIN debe ser de 4 dígitos", "error");
+    if (val.length !== 6 || isNaN(val)) {
+        showToast("El PIN debe ser de 6 dígitos", "error");
         return;
     }
 
@@ -606,7 +606,7 @@ form.addEventListener('submit', (event) => {
 });
 
 document.getElementById('changeParticipant').addEventListener('click', async () => {
-    if (!confirm("¿Otra persona va a cantar desde este dispositivo?")) return;
+    if (!confirm("¿Otra persona pedirá turnos desde este dispositivo?")) return;
 
     try {
         const response = await fetch('api.php?action=reset_participant', {

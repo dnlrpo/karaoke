@@ -101,6 +101,33 @@ final class SecurityTest extends KaraokeTestCase
         $this->assertStringContainsString('Demasiados registros', $res['message']);
     }
 
+    public function testUpdatePinRequiresSixDigits(): void
+    {
+        $client = $this->client();
+        $csrf = $this->loginAdmin($client);
+
+        $res = $client->post(
+            '/api.php?action=update_staff_pin',
+            ['newPin' => '1234'],
+            $this->csrfHeader($csrf)
+        );
+
+        $this->assertSame(422, $res['_http_status']);
+        $this->assertStringContainsString('6 dígitos', $res['message']);
+    }
+
+    public function testLegacyFourDigitPinStillLogsIn(): void
+    {
+        // Los PIN de 4 dígitos creados antes del cambio siguen siendo válidos
+        $this->db()
+            ->prepare("UPDATE admins SET password_hash = ? WHERE username = 'staff'")
+            ->execute([password_hash('4321', PASSWORD_DEFAULT)]);
+
+        $res = $this->client()->post('/api.php?action=login', ['pin' => '4321']);
+
+        $this->assertTrue($res['success']);
+    }
+
     public function testPinChangeInvalidatesOtherSessions(): void
     {
         $clientA = $this->client();
@@ -111,7 +138,7 @@ final class SecurityTest extends KaraokeTestCase
 
         $res = $clientA->post(
             '/api.php?action=update_staff_pin',
-            ['newPin' => '5678'],
+            ['newPin' => '567890'],
             $this->csrfHeader($csrfA)
         );
         $this->assertTrue($res['success']);
@@ -126,9 +153,9 @@ final class SecurityTest extends KaraokeTestCase
 
         // El PIN nuevo funciona y el anterior no
         $clientC = $this->client();
-        $this->assertTrue($clientC->post('/api.php?action=login', ['pin' => '5678'])['success']);
+        $this->assertTrue($clientC->post('/api.php?action=login', ['pin' => '567890'])['success']);
 
         $clientD = $this->client();
-        $this->assertFalse($clientD->post('/api.php?action=login', ['pin' => '1234'])['success']);
+        $this->assertFalse($clientD->post('/api.php?action=login', ['pin' => TEST_ADMIN_PIN])['success']);
     }
 }

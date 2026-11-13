@@ -60,10 +60,10 @@ FLUSH PRIVILEGES;
 4. Comprobar cola, registro (el código de la noche inicial es `TRILLA24`), reacciones y reorder.
 
 > **Si se pierde el PIN**, no hay script web para regenerarlo a propósito (sería una puerta trasera).
-> Se hace desde la base de datos:
+> Se hace desde la base de datos. Sustituye `482913` por tu PIN de **6 dígitos**:
 >
 > ```bash
-> php -r 'echo password_hash("NUEVO_PIN", PASSWORD_DEFAULT), PHP_EOL;'
+> php -r 'echo password_hash("482913", PASSWORD_DEFAULT), PHP_EOL;'
 > ```
 >
 > ```sql

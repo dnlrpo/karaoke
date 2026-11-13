@@ -542,8 +542,8 @@ try {
             $data = readJsonBody();
             $new_pin = inputString($data, 'newPin');
 
-            if (preg_match('/^\d{4}$/', $new_pin) !== 1) {
-                fail('El PIN debe ser de 4 dígitos numéricos', 422);
+            if (preg_match('/^\d{6}$/', $new_pin) !== 1) {
+                fail('El PIN debe ser de 6 dígitos numéricos', 422);
             }
 
             $hash = password_hash($new_pin, PASSWORD_DEFAULT);

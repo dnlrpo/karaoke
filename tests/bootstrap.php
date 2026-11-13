@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 const KARAOKE_ROOT = __DIR__ . '/..';
-const TEST_ADMIN_PIN = '1234';
+const TEST_ADMIN_PIN = '123456';
 
 // Carga .env antes de conectar (misma precedencia que db.php: el entorno real
 // gana). Hace falta para crear la BD de test antes de que db.php se conecte.

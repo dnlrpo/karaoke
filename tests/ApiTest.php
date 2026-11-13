@@ -122,17 +122,17 @@ final class ApiTest extends KaraokeTestCase
         $client = $this->client();
 
         for ($i = 1; $i <= 4; $i++) {
-            $res = $client->post('/api.php?action=login', ['pin' => '9999']);
+            $res = $client->post('/api.php?action=login', ['pin' => '999999']);
             $this->assertFalse($res['success']);
             $this->assertStringContainsString('restantes', $res['message']);
         }
 
         // El 5º intento agota el límite
-        $res = $client->post('/api.php?action=login', ['pin' => '9999']);
+        $res = $client->post('/api.php?action=login', ['pin' => '999999']);
         $this->assertFalse($res['success']);
         $this->assertStringContainsString('bloqueado', $res['message']);
 
-        $res = $client->post('/api.php?action=login', ['pin' => '9999']);
+        $res = $client->post('/api.php?action=login', ['pin' => '999999']);
         $this->assertFalse($res['success']);
         $this->assertStringContainsString('Demasiados intentos', $res['message']);
     }

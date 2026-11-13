@@ -429,7 +429,7 @@ function checkDefaultAdmin(PDO $pdo): void
         return;
     }
 
-    $pin = (string)random_int(1000, 9999);
+    $pin = (string)random_int(100000, 999999);
     $hash = password_hash($pin, PASSWORD_DEFAULT);
     $stmt = $pdo->prepare("INSERT INTO admins (username, password_hash) VALUES ('staff', ?)");
     $stmt->execute([$hash]);

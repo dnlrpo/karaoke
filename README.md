@@ -127,7 +127,7 @@ junto con `{"success": false, "message": "..."}`.
 
 - Sesión con cookie `HttpOnly` + `SameSite=Lax` (+ `Secure` bajo HTTPS)
 - CSRF en todas las acciones administrativas
-- PIN hasheado con `password_hash` (bcrypt); PIN inicial aleatorio, nunca `1234`
+- PIN de 6 dígitos hasheado con `password_hash` (bcrypt); PIN inicial aleatorio, cámbialo en el primer acceso
 - Cambiar el PIN invalida el resto de sesiones de staff (`auth_epoch` en `settings`)
 - Identidad anónima de participante: cookie `karaoke_pid` `HttpOnly` (12 h) con token aleatorio;
   en BD solo se guarda su hash. El código de la noche nunca se guarda en el cliente

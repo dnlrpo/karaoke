@@ -122,7 +122,7 @@
 **Historias de Usuario Relacionadas:**
 - Como organizador, quiero un código único por evento para controlar acceso
 - Como sistema, quiero validar códigos de acceso antes de permitir registro
-- Como sistema, quiero proteger el panel admin con PIN de 4 dígitos
+- Como sistema, quiero proteger el panel admin con PIN de 6 dígitos
 
 ---
 
@@ -263,10 +263,10 @@ Panel flotante que permite a los asistentes enviar emojis de reacción durante l
 **Esfuerzo Estimado:** 8 Story Points
 
 #### Descripción
-Sistema de login con PIN de 4 dígitos para acceso al panel administrativo.
+Sistema de login con PIN de 6 dígitos para acceso al panel administrativo.
 
 #### Criterios de Aceptación
-- [ ] Modal de login con campo de PIN (4 dígitos)
+- [ ] Modal de login con campo de PIN (6 dígitos)
 - [ ] PIN almacenado con hash seguro (password_hash)
 - [ ] Rate limiting: máximo 5 intentos fallidos
 - [ ] Bloqueo de 5 minutos después de 5 intentos
@@ -381,14 +381,14 @@ Sistema que requiere un código diario para permitir registros, evitando partici
 - [ ] Campo de código visible en formulario de registro
 - [ ] Validación contra código almacenado en DB
 - [ ] Código case-insensitive (convertido a mayúsculas)
-- [ ] Código validado se guarda en sesión (8 horas)
+- [ ] Código validado se guarda en sesión (12 horas)
 - [ ] Después de validación, campo se oculta
 - [ ] Mensaje de error claro si código es incorrecto
 
 #### Detalles Técnicos
 - **Tabla DB:** `settings` (key='night_code', value='CODIGO')
 - **Sesión:** `$_SESSION['access_code_validated']`, `$_SESSION['access_code_time']`
-- **Validez:** 8 horas (28800 segundos)
+- **Validez:** 12 horas (43200 segundos)
 - **Normalización:** `strtoupper(trim($code))`
 
 #### Flujo de Usuario
@@ -501,8 +501,8 @@ Interruptor que permite al staff habilitar o deshabilitar el registro de nuevos 
 Funcionalidad que permite al staff cambiar su PIN de acceso por seguridad.
 
 #### Criterios de Aceptación
-- [ ] Campo de entrada para nuevo PIN (4 dígitos)
-- [ ] Validación: exactamente 4 dígitos numéricos
+- [ ] Campo de entrada para nuevo PIN (6 dígitos)
+- [ ] Validación: exactamente 6 dígitos numéricos
 - [ ] Confirmación antes de cambiar
 - [ ] Nuevo PIN hasheado antes de guardar
 - [ ] Feedback de éxito/error
@@ -866,7 +866,7 @@ Q1 2026                Q2 2026                Q3 2026                Q4 2026
 ### Riesgos Técnicos
 - ⚠️ **Escalabilidad:** Polling puede ser costoso con muchos usuarios
 - ⚠️ **Single Point of Failure:** DB sin replicación
-- ⚠️ **Seguridad:** PIN de 4 dígitos puede ser vulnerable a brute force (mitigado con rate limiting)
+- ⚠️ **Seguridad:** PIN de 6 dígitos puede ser vulnerable a brute force (mitigado con rate limiting)
 - ⚠️ **Browser Compatibility:** Dependencia de JavaScript moderno
 
 ### Dependencias Externas
