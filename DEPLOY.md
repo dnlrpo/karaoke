@@ -21,8 +21,9 @@ zip -r karaoke-prod.zip . \
      "package.json" "package-lock.json" "css/input.css" "*.log"
 ```
 
-Incluye: `index.php`, `api.php`, `db.php`, `bin/`, `assets/` (compilados), `.htaccess`, `.env.example`, docs.
-Excluye: dev, tests y ficheros de build (no se necesitan en runtime).
+Incluye: `index.php`, `api.php`, `db.php`, `assets/` (compilados), `.htaccess`, `.env.example`, docs.
+Excluye: dev, tests y ficheros de build (no se necesitan en runtime). No hay scripts ejecutables en el paquete:
+todo lo que toca credenciales se hace desde la base de datos.
 
 ## 2. Subir y configurar
 
@@ -31,6 +32,7 @@ Excluye: dev, tests y ficheros de build (no se necesitan en runtime).
 unzip karaoke-prod.zip
 cp .env.example .env
 # editar .env: DB_HOST, DB_NAME, DB_USER, DB_PASS
+# si hay proxy/CDN delante: TRUSTED_PROXIES=IP_DEL_PROXY (para que el rate limit use la IP real)
 chmod 600 .env        # (con Apache, no es necesario por .htaccess)
 ```
 
@@ -45,35 +47,59 @@ GRANT ALL PRIVILEGES ON karaoke.* TO 'karaoke'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-> Si se migra desde la versión anterior: la estructura es compatible y los datos se conservan. Se añade solo la fila `schema_version` en `settings`.
+> Si se migra desde la versión anterior: la estructura es compatible y los datos se conservan.
+> La migración v2 añade la tabla `rate_limits` para los límites de peticiones.
 
 ## 4. Primer arranque
 
 1. Abrir la URL → se ejecuta la migración automáticamente.
-2. Generar un PIN de staff **nuevo** (nunca usar uno anterior ni `1234`):
-   ```bash
-   php bin/reset-admin-pin.php
-   ```
+2. El primer request crea el admin `staff` con un PIN aleatorio. Aparece en el log de PHP
+   (`[karaoke] Admin 'staff' creado. PIN inicial: ...`) y una sola vez en la UI de esa sesión.
 3. Entrar como staff con ese PIN y cambiarlo desde **Configuración de Hoy → Cambiar PIN Staff**.
 4. Comprobar cola, registro (el código de la noche inicial es `TRILLA24`), reacciones y reorder.
+
+> **Si se pierde el PIN**, no hay script web para regenerarlo a propósito (sería una puerta trasera).
+> Se hace desde la base de datos:
+>
+> ```bash
+> php -r 'echo password_hash("NUEVO_PIN", PASSWORD_DEFAULT), PHP_EOL;'
+> ```
+>
+> ```sql
+> UPDATE admins SET password_hash = '<hash>' WHERE username = 'staff';
+> ```
+>
+> Al cambiarlo se invalidan todas las sesiones de staff abiertas. Si prefieres que el sistema
+> genere un PIN aleatorio nuevo, borra la fila (`DELETE FROM admins WHERE username = 'staff';`)
+> y el siguiente request creará otra con un PIN distinto.
+
 
 ## 5. Configuración del servidor web
 
 ### Apache
 El `.htaccess` incluido ya:
-- Bloquea `.env` y `.git` (`RewriteRule`)
+- Bloquea `.env`, `.git` y el código que no debe servirse (`bin/`, `tests/`, `vendor/`, `node_modules/`, ficheros de build)
+- Añade `X-Content-Type-Options`, `Referrer-Policy` y `X-Frame-Options`
 - Desactiva el listado de directorios (`Options -Indexes`)
 
 ### nginx
 Replicar las reglas en el `server` block:
 
 ```nginx
-location ~ /\.env$         { deny all; }
-location ~ /\.git          { deny all; }
-location ~ /\.(git|env)$   { deny all; }
-location /                 { try_files $uri $uri/ /index.php?$query_string; }
+location ~ ^/(bin|tests|vendor|node_modules)/ { deny all; }
+location ~ ^/(composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml\.dist|AGILE_REPORT\.md|DEPLOY\.md)$ { deny all; }
+location ~ /\.(env|git)        { deny all; }
+location /                     { try_files $uri $uri/ /index.php?$query_string; }
 autoindex off;
+
+add_header X-Content-Type-Options nosniff always;
+add_header Referrer-Policy strict-origin-when-cross-origin always;
+add_header X-Frame-Options DENY always;
 ```
+
+> Con proxy o CDN delante, define `TRUSTED_PROXIES` en el `.env` con la IP del proxy.
+> Sin eso, todos los clientes comparten la IP del proxy y el rate limit por IP los agrupa.
+
 
 ## 6. Limpieza inicial (si venía de la versión antigua)
 
@@ -94,8 +120,10 @@ DELETE FROM reactions WHERE created_at < NOW() - INTERVAL 1 HOUR;
 - [ ] `php -v` ≥ 8.4 y `pdo_mysql` cargado
 - [ ] `.env` con credenciales correctas y `chmod 600`
 - [ ] Primer request sin errores en el log de PHP
-- [ ] `schema_version` = 1 en `settings`
-- [ ] PIN de staff regenerado y cambiado
+- [ ] `schema_version` = 2 en `settings`
+- [ ] PIN inicial cambiado (y las sesiones de staff anteriores invalidadas)
+- [ ] `/bin/`, `/tests/` y `/vendor/` responden 403/404 (no 200)
+- [ ] Login: 15 fallos desde la misma IP quedan bloqueados 15 minutos (tabla `rate_limits`)
 - [ ] Assets cargan sin CDN (cortar internet y recargar)
 - [ ] Cola, reacciones y panel admin funcionan en móvil y desktop
 - [ ] HTTPS activo (la sesión se marca `Secure` automáticamente)

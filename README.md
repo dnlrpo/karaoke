@@ -31,6 +31,9 @@ cp .env.example .env
 # editar .env con tus credenciales (DB_USER, DB_PASS, ...)
 ```
 
+> Si hay un proxy o CDN delante, rellena `TRUSTED_PROXIES` con la IP del proxy para que el
+> rate limiting use la IP real del cliente y no la del proxy.
+
 3. Instalar dependencias (solo dev/tests y build de CSS):
 
 ```bash
@@ -106,13 +109,21 @@ Endpoints principales (todas las respuestas son JSON):
 | `toggle_registration` | POST | Abrir/cerrar registro (admin) |
 
 Las acciones de admin requieren el header `X-CSRF-Token` con el token devuelto por `get_queue`.
+Cada acción acepta un único método HTTP (`GET` para las lecturas, `POST` para todo lo demás):
+si se usa otro, la API responde `405`. Los errores usan códigos HTTP reales
+(`403` acceso/CSRF, `409` conflicto de cola, `422` validación, `429` rate limit, `500` error interno)
+junto con `{"success": false, "message": "..."}`.
 
 ## Seguridad
 
 - Sesión con cookie `HttpOnly` + `SameSite=Lax` (+ `Secure` bajo HTTPS)
 - CSRF en todas las acciones administrativas
 - PIN hasheado con `password_hash` (bcrypt); PIN inicial aleatorio, nunca `1234`
-- Rate limiting en login (IP+sesión) y reacciones
+- Cambiar el PIN invalida el resto de sesiones de staff (`auth_epoch` en `settings`)
+- Rate limiting persistido en BD: login (5 fallos/5 min por sesión, 15/15 min por IP),
+  registro (12/10 min por sesión, 150/h por IP) y reacciones (15/30 s por sesión)
+- La IP del cliente se toma de `REMOTE_ADDR`; `X-Forwarded-For` solo se acepta desde `TRUSTED_PROXIES`
+- Límites de longitud en todos los campos del formulario y tope de 80 turnos en la cola
 - SQL preparado en todas las consultas; escape de salida en el frontend
 - Reacciones antiguas se purgan automáticamente (> 1 hora, probabilístico); para purga inmediata programar un cron:
 

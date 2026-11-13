@@ -273,7 +273,10 @@ async function checkPin() {
 
 async function logoutAdmin() {
     try {
-        const response = await fetch('api.php?action=logout', { headers: { 'X-CSRF-Token': csrfToken } });
+        const response = await fetch('api.php?action=logout', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken }
+        });
         const data = await response.json();
         if (data.success) {
             isAdmin = false;
@@ -475,7 +478,10 @@ form.addEventListener('submit', async (e) => {
 document.getElementById('clearAll').addEventListener('click', async () => {
     if (isAdmin && confirm("¿Deseas reiniciar toda la lista de hoy?")) {
         try {
-            const response = await fetch('api.php?action=clear_queue', { headers: { 'X-CSRF-Token': csrfToken } });
+            const response = await fetch('api.php?action=clear_queue', {
+                method: 'POST',
+                headers: { 'X-CSRF-Token': csrfToken }
+            });
             const data = await response.json();
             if (data.success) {
                 fetchQueue();

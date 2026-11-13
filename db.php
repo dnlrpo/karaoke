@@ -48,7 +48,7 @@ try {
 }
 
 /** Bump this constant when the schema changes to trigger pending migrations */
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * Start a hardened session (HttpOnly, SameSite, Secure on HTTPS).
@@ -83,12 +83,114 @@ function getNightCode(PDO $pdo): string
 }
 
 /**
- * Check if the staff user is logged in.
+ * Auth epoch: bumping it invalidates every staff session except the current one.
+ * Stored in settings so it survives restarts and is shared by all PHP workers.
  */
-function isAdmin(): bool
+function authEpoch(PDO $pdo, bool $refresh = false): int
+{
+    static $epoch = null;
+    if ($epoch === null || $refresh) {
+        try {
+            $stmt = $pdo->prepare("SELECT `value` FROM settings WHERE `key` = 'auth_epoch'");
+            $stmt->execute();
+            $row = $stmt->fetch();
+            $epoch = $row !== false ? (int)$row['value'] : 0;
+        } catch (PDOException $e) {
+            $epoch = 0;
+        }
+    }
+    return $epoch;
+}
+
+/**
+ * Client IP, honouring X-Forwarded-For only when the request comes from a
+ * proxy listed in TRUSTED_PROXIES (never trust the header blindly).
+ */
+function clientIp(): string
+{
+    $remote = (string)($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0');
+    $trustedRaw = (string)(getenv('TRUSTED_PROXIES') ?: '');
+
+    if ($trustedRaw !== '' && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $trusted = array_filter(array_map('trim', explode(',', $trustedRaw)));
+        if (in_array($remote, $trusted, true)) {
+            $candidate = trim(explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR'])[0]);
+            if (filter_var($candidate, FILTER_VALIDATE_IP) !== false) {
+                return $candidate;
+            }
+        }
+    }
+
+    return $remote;
+}
+
+/**
+ * Rate limit key: IPs are stored as packed bytes, anything else (e.g. a
+ * session id) as a sha256 digest, so a single VARBINARY column fits both.
+ */
+function rateLimitSubject(string $key): string
+{
+    $packed = @inet_pton($key);
+    return $packed !== false ? $packed : hash('sha256', $key, true);
+}
+
+/**
+ * Attempts recorded for a subject inside the current window (0 if expired).
+ */
+function rateLimitCount(PDO $pdo, string $bucket, string $key, int $window): int
+{
+    $stmt = $pdo->prepare(
+        "SELECT attempts FROM rate_limits
+         WHERE bucket = ? AND subject = ? AND window_start >= ? - ?"
+    );
+    $stmt->execute([$bucket, rateLimitSubject($key), time(), $window]);
+    $count = $stmt->fetchColumn();
+    return $count === false ? 0 : (int)$count;
+}
+
+/**
+ * Record one attempt. Starts a new window when the previous one expired.
+ */
+function rateLimitIncrement(PDO $pdo, string $bucket, string $key, int $window): void
+{
+    $now = time();
+    $stmt = $pdo->prepare(
+        "INSERT INTO rate_limits (bucket, subject, window_start, attempts)
+         VALUES (?, ?, ?, 1)
+         ON DUPLICATE KEY UPDATE
+             attempts = IF(window_start < ? - ?, 1, attempts + 1),
+             window_start = IF(window_start < ? - ?, ?, window_start)"
+    );
+    $stmt->execute([$bucket, rateLimitSubject($key), $now, $now, $window, $now, $window, $now]);
+
+    // Cleanup oportunista de ventanas antiguas (1 % de los incrementos)
+    if (random_int(1, 100) === 1) {
+        $pdo->prepare("DELETE FROM rate_limits WHERE window_start < ? - 86400")
+            ->execute([$now]);
+    }
+}
+
+/**
+ * Forget the attempts for a subject (e.g. after a successful login).
+ */
+function rateLimitReset(PDO $pdo, string $bucket, string $key): void
+{
+    $pdo->prepare("DELETE FROM rate_limits WHERE bucket = ? AND subject = ?")
+        ->execute([$bucket, rateLimitSubject($key)]);
+}
+
+/**
+ * Check if the staff user is logged in: session flag plus a current auth epoch.
+ * Sessions created before this check existed carry no epoch (0) and stay valid
+ * until the PIN is changed once.
+ */
+function isAdmin(PDO $pdo): bool
 {
     secureSessionStart();
-    return isset($_SESSION['admin_auth']) && $_SESSION['admin_auth'] === true;
+    if (($_SESSION['admin_auth'] ?? null) !== true) {
+        return false;
+    }
+    return (int)($_SESSION['auth_epoch'] ?? 0) === authEpoch($pdo);
 }
 
 /**
@@ -167,6 +269,18 @@ function initDatabase(PDO $pdo): void
             $seed = $pdo->prepare("INSERT IGNORE INTO settings (`key`, `value`) VALUES (?, ?)");
             $seed->execute(['night_code', 'TRILLA24']);
             $seed->execute(['registration_enabled', '1']);
+        },
+        2 => static function (PDO $pdo): void {
+            $pdo->exec("
+                CREATE TABLE IF NOT EXISTS rate_limits (
+                    bucket VARCHAR(32) NOT NULL,
+                    subject VARBINARY(64) NOT NULL,
+                    window_start INT UNSIGNED NOT NULL,
+                    attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+                    PRIMARY KEY (bucket, subject),
+                    KEY idx_rate_limits_window (window_start)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
         },
     ];
 

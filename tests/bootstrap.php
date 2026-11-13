@@ -24,9 +24,7 @@ try {
     fwrite(STDERR, "[bootstrap] No se pudo crear karaoke_test: " . $e->getMessage() . "\n");
 }
 
-// El schema ya existe por initDatabase; fuerza un PIN conocido para los tests
-$stmt = $pdo->prepare("UPDATE admins SET password_hash = ? WHERE username = 'staff'");
-$stmt->execute([password_hash(TEST_ADMIN_PIN, PASSWORD_DEFAULT)]);
+// El schema ya existe por initDatabase; el PIN de test se fija en resetTestDatabase()
 
 /**
  * HTTP client con soporte de sesión (cookie jar).
@@ -74,11 +72,13 @@ final class TestClient
         if ($raw === false) {
             throw new RuntimeException('Request failed: ' . curl_error($ch));
         }
+        $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
         $decoded = json_decode($raw, true);
         if (!is_array($decoded)) {
             throw new RuntimeException('Respuesta no JSON: ' . substr($raw, 0, 200));
         }
+        $decoded['_http_status'] = $status;
         return $decoded;
     }
 
@@ -147,7 +147,14 @@ function resetTestDatabase(): void
     );
     $pdo->exec('DELETE FROM songs');
     $pdo->exec('DELETE FROM reactions');
+    $pdo->exec('DELETE FROM rate_limits');
     $pdo->exec("UPDATE settings SET `value` = '1' WHERE `key` = 'registration_enabled'");
+    $pdo->exec("REPLACE INTO settings (`key`, `value`) VALUES ('night_code', 'TRILLA24')");
+    $pdo->exec("REPLACE INTO settings (`key`, `value`) VALUES ('auth_epoch', '0')");
+
+    // PIN conocido para los tests (algunos lo cambian y hay que restaurarlo)
+    $stmt = $pdo->prepare("UPDATE admins SET password_hash = ? WHERE username = 'staff'");
+    $stmt->execute([password_hash(TEST_ADMIN_PIN, PASSWORD_DEFAULT)]);
 }
 
 ensureTestServer();

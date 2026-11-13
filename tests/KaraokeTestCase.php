@@ -16,6 +16,22 @@ abstract class KaraokeTestCase extends PHPUnit\Framework\TestCase
     }
 
     /**
+     * Conexión directa a la BD de test (para preparar estado que la API no expone).
+     */
+    protected function db(): PDO
+    {
+        return new PDO(
+            'mysql:host=' . getenv('DB_HOST') . ';dbname=' . (getenv('DB_NAME') ?: 'karaoke_test') . ';charset=utf8mb4',
+            (string)getenv('DB_USER'),
+            (string)getenv('DB_PASS'),
+            [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]
+        );
+    }
+
+    /**
      * Login como staff y devuelve el token CSRF de la sesión.
      */
     protected function loginAdmin(TestClient $client): string
