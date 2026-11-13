@@ -31,6 +31,7 @@ final class StaticTest extends KaraokeTestCase
         $this->assertSame('nosniff', $headers['x-content-type-options'] ?? null);
         $this->assertSame('strict-origin-when-cross-origin', $headers['referrer-policy'] ?? null);
         $this->assertSame('DENY', $headers['x-frame-options'] ?? null);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{16}$/', $headers['x-request-id'] ?? '');
 
         $csp = $headers['content-security-policy'] ?? '';
         $this->assertStringContainsString("default-src 'self'", $csp);

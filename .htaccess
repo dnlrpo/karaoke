@@ -5,7 +5,7 @@ RewriteRule ^\.env$ - [F,L]
 RewriteRule ^\.git - [F,L]
 
 # Código que nunca debe servirse por HTTP (el paquete de producción ya lo excluye)
-RewriteRule ^(bin|tests|vendor|node_modules)/ - [F,L]
+RewriteRule ^(bin|src|tests|vendor|node_modules)/ - [F,L]
 RewriteRule ^(composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml\.dist|AGILE_REPORT\.md|DEPLOY\.md)$ - [F,L]
 
 Options -Indexes

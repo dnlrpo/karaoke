@@ -42,13 +42,25 @@ $options = [
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (PDOException $e) {
-    error_log("Database connection failed: " . $e->getMessage());
+    error_log('[karaoke][' . requestId() . '] Database connection failed: ' . $e->getMessage());
     http_response_code(500);
     die("Database connection failed. Please contact the administrator.");
 }
 
 /** Bump this constant when the schema changes to trigger pending migrations */
 const SCHEMA_VERSION = 3;
+
+/**
+ * Identificador corto de la petición, para correlacionar logs y respuestas.
+ */
+function requestId(): string
+{
+    static $id = null;
+    if ($id === null) {
+        $id = bin2hex(random_bytes(8));
+    }
+    return $id;
+}
 
 /**
  * Security headers for every response. They are sent from PHP so they work the
@@ -64,6 +76,7 @@ function sendSecurityHeaders(): void
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('X-Frame-Options: DENY');
+    header('X-Request-Id: ' . requestId());
     header(
         "Content-Security-Policy: default-src 'self'; " .
         "img-src 'self' data: https://latrillacultural.com; " .
@@ -338,9 +351,9 @@ function initDatabase(PDO $pdo): void
                  ON DUPLICATE KEY UPDATE `value` = VALUES(`value`)"
             );
             $stmt->execute([(string)$version]);
-            error_log("[karaoke] Migración de esquema aplicada (v{$version})");
+            error_log('[karaoke][' . requestId() . '] Migración de esquema aplicada (v' . $version . ')');
         } catch (Throwable $e) {
-            error_log("[karaoke] Migración v{$version} falló: " . $e->getMessage());
+            error_log('[karaoke][' . requestId() . '] Migración v' . $version . ' falló: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -365,7 +378,7 @@ function checkDefaultAdmin(PDO $pdo): void
     // Deja el PIN visible en la sesión hasta el primer login
     secureSessionStart();
     $_SESSION['initial_admin_pin'] = $pin;
-    error_log("[karaoke] Admin 'staff' creado. PIN inicial: {$pin} — cámbialo desde el panel.");
+    error_log('[karaoke][' . requestId() . '] Admin \'staff\' creado. PIN inicial: ' . $pin . ' — cámbialo desde el panel.');
 }
 
 // Ensure the database is ready

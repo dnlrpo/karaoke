@@ -21,7 +21,7 @@ zip -r karaoke-prod.zip . \
      "package.json" "package-lock.json" "css/input.css" "*.log"
 ```
 
-Incluye: `index.php`, `api.php`, `db.php`, `assets/` (compilados), `.htaccess`, `.env.example`, docs.
+Incluye: `index.php`, `api.php`, `db.php`, `src/`, `assets/` (compilados), `.htaccess`, `.env.example`, docs.
 Excluye: dev, tests y ficheros de build (no se necesitan en runtime). No hay scripts ejecutables en el paquete:
 todo lo que toca credenciales se hace desde la base de datos.
 
@@ -86,7 +86,7 @@ El `.htaccess` incluido ya:
 Replicar las reglas en el `server` block:
 
 ```nginx
-location ~ ^/(bin|tests|vendor|node_modules)/ { deny all; }
+location ~ ^/(bin|src|tests|vendor|node_modules)/ { deny all; }
 location ~ ^/(composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml\.dist|AGILE_REPORT\.md|DEPLOY\.md)$ { deny all; }
 location ~ /\.(env|git)        { deny all; }
 location /                     { try_files $uri $uri/ /index.php?$query_string; }
@@ -125,6 +125,7 @@ DELETE FROM reactions WHERE created_at < NOW() - INTERVAL 1 HOUR;
 - [ ] `/bin/`, `/tests/` y `/vendor/` responden 403/404 (no 200)
 - [ ] Login: 15 fallos desde la misma IP quedan bloqueados 15 minutos (tabla `rate_limits`)
 - [ ] La respuesta HTML incluye `Content-Security-Policy` con `script-src 'self'`
+- [ ] `GET /api.php?action=health` responde 200 con `{"status":"ok"}`
 - [ ] Assets cargan sin CDN (cortar internet y recargar)
 - [ ] Cola, reacciones y panel admin funcionan en móvil y desktop
 - [ ] HTTPS activo (la sesión se marca `Secure` automáticamente)

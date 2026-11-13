@@ -5,6 +5,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/src/QueueOptimizer.php';
 
 secureSessionStart();
 sendSecurityHeaders();
@@ -31,6 +32,7 @@ const MAX_ARTIST = 80;
  * Añadir una acción aquí es obligatorio: sin entrada no se ejecuta.
  */
 const ROUTES = [
+    'health'              => ['GET', false],
     'get_queue'           => ['GET', false],
     'get_reactions'       => ['GET', false],
     'add_to_queue'        => ['POST', false],
@@ -181,6 +183,22 @@ if ($adminOnly && !requireCsrfAdmin($pdo)) {
 
 try {
     switch ($action) {
+        case 'health':
+            $dbOk = false;
+            try {
+                $dbOk = (int)$pdo->query('SELECT 1')->fetchColumn() === 1;
+            } catch (Throwable $e) {
+                $dbOk = false;
+            }
+
+            jsonResponse([
+                'success' => $dbOk,
+                'status' => $dbOk ? 'ok' : 'degraded',
+                'db' => $dbOk ? 'ok' : 'error',
+                'schema_version' => getSchemaVersion($pdo),
+                'time' => gmdate('c'),
+            ], $dbOk ? 200 : 503);
+
         case 'get_queue':
             $stmt = $pdo->prepare("SELECT id, user_name, song_title, artist_name, status FROM songs WHERE status IN ('waiting', 'singing') ORDER BY sort_order ASC, id ASC");
             $stmt->execute();
@@ -309,7 +327,7 @@ try {
             $_SESSION['login_attempts']++;
             $_SESSION['last_attempt_time'] = $now;
             rateLimitIncrement($pdo, 'login_ip', $ip, RL_LOGIN_IP_WINDOW);
-            error_log('[karaoke] Login fallido desde ' . $ip);
+            error_log('[karaoke][' . requestId() . '] Login fallido desde ' . $ip);
 
             $remainingAttempts = $maxAttempts - $_SESSION['login_attempts'];
             if ($remainingAttempts <= 0) {
@@ -402,69 +420,8 @@ try {
                 $stats[$user] ??= 0;
             }
 
-            // 3. Move newbies forward if they are far (index >= 6)
-            $newbies = [];
-            $others = [];
-            foreach ($queue as $index => $song) {
-                if ($stats[$song['user_name']] === 0 && $index >= 6) {
-                    $newbies[] = $song;
-                } else {
-                    $others[] = $song;
-                }
-            }
-
-            // Insert newbies at position 5 (6th place), preserving their order
-            array_splice($others, 5, 0, $newbies);
-
-            $reordered = $others;
-
-            // 4. Redistribute to avoid consecutive singers and ensure 4-turn gap
-            $finalQueue = [];
-            $pool = $reordered;
-            $history = [];
-            $maxGap = 4;
-
-            while (!empty($pool)) {
-                $found = false;
-                foreach ($pool as $index => $song) {
-                    if (!in_array($song['user_name'], $history, true)) {
-                        $finalQueue[] = $song;
-
-                        array_unshift($history, $song['user_name']);
-                        if (count($history) > $maxGap) {
-                            array_pop($history);
-                        }
-
-                        array_splice($pool, $index, 1);
-                        $found = true;
-                        break;
-                    }
-                }
-
-                if (!$found) {
-                    foreach ($pool as $index => $song) {
-                        if (empty($history) || $song['user_name'] !== $history[0]) {
-                            $finalQueue[] = $song;
-                            array_unshift($history, $song['user_name']);
-                            if (count($history) > $maxGap) {
-                                array_pop($history);
-                            }
-                            array_splice($pool, $index, 1);
-                            $found = true;
-                            break;
-                        }
-                    }
-
-                    if (!$found) {
-                        $song = array_shift($pool);
-                        $finalQueue[] = $song;
-                        array_unshift($history, $song['user_name']);
-                        if (count($history) > $maxGap) {
-                            array_pop($history);
-                        }
-                    }
-                }
-            }
+            // 3-4. Optimizar la cola (lógica pura, testeada sin BD)
+            $finalQueue = QueueOptimizer::optimize($queue, $stats);
 
             // 5. Renumber all active songs sequentially, then place optimized queue after singing
             $pdo->beginTransaction();
@@ -599,7 +556,7 @@ try {
             ]);
     }
 } catch (Throwable $e) {
-    error_log('[karaoke] ' . $action . ': ' . $e->getMessage());
+    error_log('[karaoke][' . requestId() . '] ' . $action . ': ' . $e->getMessage());
     fail('Error interno del servidor', 500);
 }
 

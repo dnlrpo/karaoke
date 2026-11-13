@@ -1,5 +1,7 @@
 # 🎤 Karaoke La Trilla Cultural
 
+![CI](https://github.com/dnlrpo/karaoke/actions/workflows/ci.yml/badge.svg)
+
 Gestión de turnos para eventos de karaoke en tiempo real. Los asistentes se registran con un código diario, ven su posición en la cola y envían reacciones; el staff administra la cola desde un panel con PIN.
 
 ## Requisitos
@@ -63,7 +65,8 @@ php -S localhost:8000
 
 ## Tests
 
-Los tests (`tests/`) levantan un servidor PHP real y una base de datos `karaoke_test`:
+Los tests (`tests/`) levantan un servidor PHP real y una base de datos `karaoke_test`.
+`QueueOptimizerTest` prueba la lógica de reordenamiento sin BD (casos límite incluidos):
 
 ```bash
 composer test
@@ -85,8 +88,10 @@ assets/
 css/input.css            # Fuente de Tailwind (@source directives)
 api.php                  # REST API (acciones separadas por ?action=)
 db.php                   # Conexión, sesión segura, migraciones
+src/QueueOptimizer.php   # Lógica pura de optimización de la cola
 index.php                # UI
-tests/                   # PHPUnit
+.github/workflows/ci.yml # CI (PHP 8.4 + MySQL 8.4)
+tests/                   # PHPUnit (integración + unitarios)
 ```
 
 ## API
@@ -107,6 +112,7 @@ Endpoints principales (todas las respuestas son JSON):
 | `update_night_code` | POST | Cambiar código diario (admin) |
 | `update_staff_pin` | POST | Cambiar PIN staff (admin) |
 | `toggle_registration` | POST | Abrir/cerrar registro (admin) |
+| `health` | GET | Estado del servicio y de la BD (para uptime checks) |
 
 Las acciones de admin requieren el header `X-CSRF-Token` con el token devuelto por `get_queue`.
 Cada acción acepta un único método HTTP (`GET` para las lecturas, `POST` para todo lo demás):

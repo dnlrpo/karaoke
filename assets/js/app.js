@@ -54,6 +54,11 @@ async function fetchQueue() {
             codeLabel.innerText = nightCode;
         }
 
+        // Si el flag quedó atascado (drag cancelado sin onEnd), liberarlo
+        if (isDragging && !sortableIsDragging()) {
+            isDragging = false;
+        }
+
         // Solo se repinta la cola cuando cambia algo, y nunca mientras se arrastra
         const signature = queueSignature(data.queue, adminNow);
         if (signature !== lastQueueSignature && !isDragging) {
@@ -83,6 +88,10 @@ function queueSignature(queue, admin) {
         admin === true,
         queue.map(item => [item.id, item.user_name, item.song_title, item.artist_name]),
     ]);
+}
+
+function sortableIsDragging() {
+    return document.querySelector('.sortable-drag, .sortable-ghost') !== null;
 }
 
 let initialPinShown = false;
@@ -444,6 +453,8 @@ async function autoReorderQueue() {
         });
         const data = await response.json();
         if (data.success) {
+            lastQueueSignature = ""; // fuerza repintado con el orden del servidor
+            isDragging = false;
             fetchQueue();
             showToast(data.message);
         } else {
@@ -484,6 +495,7 @@ async function removeFromQueue(id) {
         });
         const data = await response.json();
         if (data.success) {
+            lastQueueSignature = "";
             fetchQueue();
             showToast(data.message);
         }
@@ -532,6 +544,7 @@ document.getElementById('clearAll').addEventListener('click', async () => {
             });
             const data = await response.json();
             if (data.success) {
+                lastQueueSignature = "";
                 fetchQueue();
                 showToast(data.message);
             }

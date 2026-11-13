@@ -17,6 +17,17 @@ final class ApiTest extends KaraokeTestCase
         $this->assertIsArray($res['reactions']);
     }
 
+    public function testHealthEndpoint(): void
+    {
+        $res = $this->client()->get('/api.php?action=health');
+
+        $this->assertTrue($res['success']);
+        $this->assertSame('ok', $res['status']);
+        $this->assertSame('ok', $res['db']);
+        $this->assertSame(SCHEMA_VERSION, $res['schema_version']);
+        $this->assertIsString($res['time']);
+    }
+
     public function testAddToQueueRequiresAllFields(): void
     {
         $res = $this->client()->post('/api.php?action=add_to_queue', [

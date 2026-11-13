@@ -5,24 +5,41 @@ declare(strict_types=1);
 const KARAOKE_ROOT = __DIR__ . '/..';
 const TEST_ADMIN_PIN = '1234';
 
-// Configura la DB de test ANTES de cargar db.php
+// Carga .env antes de conectar (misma precedencia que db.php: el entorno real
+// gana). Hace falta para crear la BD de test antes de que db.php se conecte.
+$envFile = KARAOKE_ROOT . '/.env';
+if (is_file($envFile)) {
+    $vars = parse_ini_file($envFile, false, INI_SCANNER_RAW);
+    if (is_array($vars)) {
+        foreach ($vars as $name => $value) {
+            if (getenv($name) !== false) {
+                continue;
+            }
+            putenv("$name=$value");
+            $_ENV[$name] = $value;
+        }
+    }
+}
+
 putenv('DB_NAME=karaoke_test');
 $_ENV['DB_NAME'] = 'karaoke_test';
 
-require_once KARAOKE_ROOT . '/db.php';
-
-// Crea la DB de test si no existe (usa credenciales del .env)
+// La BD de test debe existir ANTES de requerir db.php (que conecta al incluirse)
 try {
     $adminPdo = new PDO(
-        'mysql:host=' . getenv('DB_HOST') . ';charset=utf8mb4',
-        getenv('DB_USER'),
-        getenv('DB_PASS'),
+        'mysql:host=' . (getenv('DB_HOST') ?: 'localhost') . ';charset=utf8mb4',
+        getenv('DB_USER') ?: 'karaoke',
+        getenv('DB_PASS') ?: '',
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
     );
     $adminPdo->exec('CREATE DATABASE IF NOT EXISTS karaoke_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
 } catch (PDOException $e) {
     fwrite(STDERR, "[bootstrap] No se pudo crear karaoke_test: " . $e->getMessage() . "\n");
+    throw new RuntimeException('MySQL no está disponible para la suite de tests', 0, $e);
 }
+
+require_once KARAOKE_ROOT . '/db.php';
+require_once KARAOKE_ROOT . '/src/QueueOptimizer.php';
 
 // El schema ya existe por initDatabase; el PIN de test se fija en resetTestDatabase()
 
