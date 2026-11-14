@@ -3,6 +3,19 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/app/db.php';
 
 sendSecurityHeaders();
+
+// Base URL para que los assets y las llamadas fetch funcionen tanto en la
+// raíz como en un subdirectorio (/karaoke) con o sin barra final.
+$scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
+if (str_ends_with($scriptName, '/index.php')) {
+    $basePath = substr($scriptName, 0, -strlen('/index.php'));
+} elseif (str_ends_with($scriptName, '.php')) {
+    $basePath = dirname($scriptName);
+} else {
+    // Algunos servidores dejan SCRIPT_NAME como el directorio (/karaoke).
+    $basePath = rtrim($scriptName, '/');
+}
+$baseHref = rtrim($basePath, '/') === '' ? '/' : rtrim($basePath, '/') . '/';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -10,6 +23,7 @@ sendSecurityHeaders();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="<?= htmlspecialchars($baseHref, ENT_QUOTES) ?>">
     <title>Karaoke La Trilla Cultural</title>
     <link rel="stylesheet" href="assets/css/tailwind.min.css">
     <link href="assets/vendor/fontawesome/all.min.css" rel="stylesheet">
