@@ -7,6 +7,6 @@
     "tailwindcss": "4.3.3"
   },
   "scripts": {
-    "build": "tailwindcss -i css/input.css -o assets/css/tailwind.min.css --minify"
+    "build": "tailwindcss -i css/input.css -o public/assets/css/tailwind.min.css --minify"
   }
 }

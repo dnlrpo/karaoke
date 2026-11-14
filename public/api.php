@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
-require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/src/QueueOptimizer.php';
-require_once __DIR__ . '/src/Participant.php';
+require_once dirname(__DIR__) . '/app/db.php';
+require_once dirname(__DIR__) . '/app/src/QueueOptimizer.php';
+require_once dirname(__DIR__) . '/app/src/Participant.php';
 
 secureSessionStart();
 sendSecurityHeaders();

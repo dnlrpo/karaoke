@@ -9,10 +9,43 @@ Gestión de turnos para eventos de karaoke en tiempo real. Los asistentes se reg
 | Dependencia | Versión mínima | Uso |
 |---|---|---|
 | PHP | 8.4 | Runtime (requerido por PHPUnit 13) |
+| Extensiones PHP | `pdo_mysql`, `mbstring`, `json` | Runtime |
 | MySQL / MariaDB | 5.7+ | Base de datos |
 | Node.js + npm | 20+ | Solo para **regenerar** el CSS de Tailwind |
 
-La aplicación **no depende de ningún CDN**: todos los assets (Tailwind compilado, Font Awesome, SortableJS, fuentes y logo) están versionados en `assets/`. Solo se necesita internet para instalar dependencias la primera vez.
+La aplicación **no depende de ningún CDN**: todos los assets (Tailwind compilado, Font Awesome, SortableJS, fuentes y logo) están versionados en `public/assets/`. Solo se necesita internet para instalar dependencias la primera vez.
+
+## Estructura segura
+
+La única carpeta expuesta por HTTP es `public/`. El código, la configuración y las dependencias viven fuera de ella:
+
+```text
+karaoke-files/
+├── public/                  # única raíz web
+│   ├── index.php
+│   ├── api.php
+│   ├── .htaccess
+│   └── assets/
+├── app/                     # código no público
+│   ├── db.php
+│   └── src/
+├── config/
+│   ├── .env                 # credenciales (no versionado)
+│   └── .env.example
+├── storage/                 # datos mutables
+├── vendor/                  # Composer
+├── tests/                   # PHPUnit
+├── css/input.css            # fuente de Tailwind
+└── ...
+```
+
+En producción, el `DocumentRoot` del sitio principal contiene un enlace simbólico:
+
+```bash
+ln -s /ruta/a/karaoke-files/public /ruta/al/public_html/karaoke
+```
+
+Así `https://latrillacultural.com/karaoke` resuelve únicamente contra `karaoke-files/public`. El `.env`, `app/`, `storage/`, `vendor/` y `tests/` nunca son accesibles por HTTP.
 
 ## Instalación
 
@@ -29,8 +62,9 @@ FLUSH PRIVILEGES;
 2. Copiar la configuración:
 
 ```bash
-cp .env.example .env
-# editar .env con tus credenciales (DB_USER, DB_PASS, ...)
+cp config/.env.example config/.env
+# editar config/.env con tus credenciales (DB_USER, DB_PASS, ...)
+chmod 600 config/.env
 ```
 
 > Si hay un proxy o CDN delante, rellena `TRUSTED_PROXIES` con la IP del proxy para que el
@@ -43,61 +77,41 @@ composer install
 npm install
 ```
 
-> En producción no hace falta `npm install`: `assets/css/tailwind.min.css` ya está compilado y commiteado.
+> En producción no hace falta `npm install`: `public/assets/css/tailwind.min.css` ya está compilado y commiteado.
 
-4. Arrancar el servidor:
+4. Arrancar el servidor de desarrollo:
 
 ```bash
-php -S localhost:8000
-# o usar Apache/Nginx con DocumentRoot en la raíz del proyecto
+php -S localhost:8000 -t public
 ```
 
-5. **Primer arranque:** el esquema se crea solo (migraciones en `db.php`). El PIN inicial del staff se genera aleatoriamente y se escribe en el log de PHP/error_log (busca `[karaoke] Admin 'staff' creado`). Cámbialo desde el panel en la primera sesión. El código de la noche inicial es `TRILLA24`.
+> **Importante:** usar siempre `-t public`. Si se arranca el servidor embebido desde la raíz del
+> proyecto, se podrían servir `app/`, `config/` o `storage/`.
+
+5. **Primer arranque:** el esquema se crea solo (migraciones en `app/db.php`). El PIN inicial del staff se genera aleatoriamente y se escribe en el log de PHP/error_log (busca `[karaoke] Admin 'staff' creado`). Cámbialo desde el panel en la primera sesión. El código de la noche inicial es `TRILLA24`.
 
 ## Comandos
 
 | Comando | Descripción |
 |---|---|
-| `php -S localhost:8000` | Servidor de desarrollo |
+| `php -S localhost:8000 -t public` | Servidor de desarrollo |
 | `composer test` | Ejecutar la suite PHPUnit |
 | `composer lint` | Lint de sintaxis PHP de todo el proyecto |
-| `npm run build` | Regenerar `assets/css/tailwind.min.css` (tras añadir clases) |
+| `npm run build` | Regenerar `public/assets/css/tailwind.min.css` (tras añadir clases) |
 
 ## Tests
 
-Los tests (`tests/`) levantan un servidor PHP real y una base de datos `karaoke_test`.
-`QueueOptimizerTest` prueba la lógica de reordenamiento sin BD (casos límite incluidos):
+Los tests (`tests/`) levantan un servidor PHP real con `public/` como document root y una base de datos `karaoke_test`. `QueueOptimizerTest` prueba la lógica de reordenamiento sin BD (casos límite incluidos):
 
 ```bash
 composer test
 ```
 
-La DB `karaoke_test` debe existir y ser accesible por el usuario del `.env` (crearla con los GRANT del paso 1). Cada test parte de una base limpia.
-
-## Estructura
-
-```
-assets/
-  css/tailwind.min.css   # Tailwind 4.3.3 compilado (no editar a mano)
-  css/style.css          # CSS custom
-  js/app.js              # Lógica de la app
-  js/sortable.min.js     # SortableJS 1.15.7
-  vendor/fontawesome/    # Font Awesome 7.3.1 (css + webfonts)
-  fonts/                 # Google Fonts (Courgette, Montserrat) locales
-  img/                   # Logo
-css/input.css            # Fuente de Tailwind (@source directives)
-api.php                  # REST API (acciones separadas por ?action=)
-db.php                   # Conexión, sesión segura, migraciones
-src/QueueOptimizer.php   # Lógica pura de optimización de la cola
-src/Participant.php      # Identidad anónima (cookie + sesión)
-index.php                # UI
-.github/workflows/ci.yml # CI (PHP 8.4 + MySQL 8.4)
-tests/                   # PHPUnit (integración + unitarios)
-```
+La DB `karaoke_test` debe existir y ser accesible por el usuario de `config/.env` (crearla con los GRANT del paso 1). Cada test parte de una base limpia.
 
 ## API
 
-Endpoints principales (todas las respuestas son JSON):
+La API vive en `/karaoke/api.php` (relativa a la raíz del sitio). Endpoints principales (todas las respuestas son JSON):
 
 | Acción | Método | Descripción |
 |---|---|---|
@@ -125,6 +139,7 @@ junto con `{"success": false, "message": "..."}`.
 
 ## Seguridad
 
+- **Solo `public/` es accesible por HTTP**; `app/`, `config/`, `storage/`, `vendor/`, `tests/` y la documentación quedan fuera del `DocumentRoot`.
 - Sesión con cookie `HttpOnly` + `SameSite=Lax` (+ `Secure` bajo HTTPS)
 - CSRF en todas las acciones administrativas
 - PIN de 6 dígitos hasheado con `password_hash` (bcrypt); PIN inicial aleatorio, cámbialo en el primer acceso
@@ -139,7 +154,7 @@ junto con `{"success": false, "message": "..."}`.
 - La IP del cliente se toma de `REMOTE_ADDR`; `X-Forwarded-For` solo se acepta desde `TRUSTED_PROXIES`
 - Límites de longitud en todos los campos del formulario y tope de 80 turnos en la cola
 - CSP estricta (`script-src 'self'`, sin `unsafe-inline`) con delegación de eventos en el frontend;
-  permite el logo remoto de `latrillacultural.com`
+  el logo es local, sin dependencias remotas
 - Cabeceras `X-Content-Type-Options`, `Referrer-Policy` y `X-Frame-Options` enviadas desde PHP
 - Inserción de turnos transaccional (`SELECT ... FOR UPDATE`) para no duplicar posiciones
 - Índices en `songs(status, sort_order)` y `reactions(created_at)` (migración v3)
@@ -154,10 +169,10 @@ junto con `{"success": false, "message": "..."}`.
 
 ## Mantenimiento del CSS
 
-Si se añaden/eliminan clases de Tailwind en `index.php`, `app.js` o `style.css`:
+Si se añaden/eliminan clases de Tailwind en `public/index.php`, `public/assets/js/app.js` o `public/assets/css/style.css`:
 
 ```bash
 npm run build
 ```
 
-El resultado (`assets/css/tailwind.min.css`) se commitea; en producción nunca se compila.
+El resultado (`public/assets/css/tailwind.min.css`) se commitea; en producción nunca se compila.

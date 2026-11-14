@@ -1,5 +1,5 @@
 @import "tailwindcss";
 
-@source "../index.php";
-@source "../assets/js/app.js";
-@source "../assets/css/style.css";
+@source "../public/index.php";
+@source "../public/assets/js/app.js";
+@source "../public/assets/css/style.css";

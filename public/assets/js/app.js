@@ -454,7 +454,7 @@ function renderQueue(queue) {
     if (queue.length === 0) {
         queueList.innerHTML = `
             <div class="flex flex-col items-center justify-center py-20 opacity-20 text-center px-10">
-                <img src="https://latrillacultural.com/img/logo-circular.webp" alt="Logo La Trilla" class="w-32 h-32 mb-6 grayscale">
+                <img src="assets/img/logo-circular.svg" alt="Logo La Trilla" class="w-32 h-32 mb-6 grayscale">
                 <p class="text-xl font-bold title-font text-[#ce2b47]">Lista Vacía</p>
                 <p class="text-sm">Ingresa el código del local para anotarte.</p>
             </div>

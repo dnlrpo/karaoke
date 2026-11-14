@@ -24,7 +24,7 @@ function loadEnv(string $path): void
     }
 }
 
-loadEnv(__DIR__ . '/.env');
+loadEnv(dirname(__DIR__) . '/config/.env');
 
 $host = getenv('DB_HOST') ?: 'localhost';
 $db   = getenv('DB_NAME') ?: 'karaoke';
@@ -82,7 +82,7 @@ function sendSecurityHeaders(): void
     header('X-Request-Id: ' . requestId());
     header(
         "Content-Security-Policy: default-src 'self'; " .
-        "img-src 'self' data: https://latrillacultural.com; " .
+        "img-src 'self' data:; " .
         "style-src 'self'; script-src 'self'; font-src 'self'; " .
         "connect-src 'self'; frame-ancestors 'none'; " .
         "base-uri 'none'; form-action 'self'"

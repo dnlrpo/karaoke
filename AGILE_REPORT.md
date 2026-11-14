@@ -1,6 +1,10 @@
 # 📊 Informe Ágil: Épicas y Features
 ## Aplicación de Karaoke - La Trilla Cultural
 
+> **Documento histórico (2026-11-14).** La referencia técnica vigente es
+> [`SPEC.md`](SPEC.md). Varias partes de este informe están desactualizadas
+> (`script.js`, `get_reactions`, esquema de datos y estado del proyecto).
+
 **Fecha de Generación:** 20 de Enero, 2026  
 **Versión:** 1.0  
 **Metodología:** Scrum/Ágil

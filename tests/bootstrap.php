@@ -7,7 +7,7 @@ const TEST_ADMIN_PIN = '123456';
 
 // Carga .env antes de conectar (misma precedencia que db.php: el entorno real
 // gana). Hace falta para crear la BD de test antes de que db.php se conecte.
-$envFile = KARAOKE_ROOT . '/.env';
+$envFile = KARAOKE_ROOT . '/config/.env';
 if (is_file($envFile)) {
     $vars = parse_ini_file($envFile, false, INI_SCANNER_RAW);
     if (is_array($vars)) {
@@ -38,8 +38,8 @@ try {
     throw new RuntimeException('MySQL no está disponible para la suite de tests', 0, $e);
 }
 
-require_once KARAOKE_ROOT . '/db.php';
-require_once KARAOKE_ROOT . '/src/QueueOptimizer.php';
+require_once KARAOKE_ROOT . '/app/db.php';
+require_once KARAOKE_ROOT . '/app/src/QueueOptimizer.php';
 
 // El schema ya existe por initDatabase; el PIN de test se fija en resetTestDatabase()
 
@@ -140,7 +140,7 @@ function ensureTestServer(): void
     $cmd = sprintf(
         'php -S 127.0.0.1:%d -t %s',
         $port,
-        escapeshellarg(KARAOKE_ROOT)
+        escapeshellarg(KARAOKE_ROOT . '/public')
     );
     $proc = proc_open(
         $cmd,

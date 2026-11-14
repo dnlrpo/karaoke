@@ -1,0 +1,22 @@
+RewriteEngine On
+
+# Defensa en profundidad: el código real vive fuera de public/.
+# Estas reglas solo cubren errores de copia o enlaces accidentales.
+# .well-known se deja pasar para validaciones ACME/Let's Encrypt.
+RewriteRule ^\.well-known/ - [L]
+RewriteRule (^|/)\. - [F,L]
+RewriteRule ^(app|config|storage|src|tests|vendor|node_modules|bin)/ - [F,L]
+
+# Los assets son estáticos: nunca ejecutar PHP dentro de assets/
+RewriteRule ^assets/.*\.php$ - [F,L]
+
+# Ficheros de desarrollo que no deben servirse
+RewriteRule ^(composer\.(json|lock)|package(-lock)?\.json|phpunit\.xml\.dist|AGILE_REPORT\.md|DEPLOY\.md|SPEC\.md)$ - [F,L]
+
+Options -Indexes
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set X-Frame-Options "DENY"
+</IfModule>

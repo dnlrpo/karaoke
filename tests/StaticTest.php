@@ -6,7 +6,7 @@ final class StaticTest extends KaraokeTestCase
 {
     public function testNoInlineEventHandlersOrStyles(): void
     {
-        foreach (['index.php', 'assets/js/app.js'] as $file) {
+        foreach (['public/index.php', 'public/assets/js/app.js'] as $file) {
             $source = (string)file_get_contents(KARAOKE_ROOT . '/' . $file);
 
             $this->assertSame(
@@ -39,8 +39,9 @@ final class StaticTest extends KaraokeTestCase
         $this->assertStringContainsString("style-src 'self'", $csp);
         $this->assertStringNotContainsString('unsafe-inline', $csp);
 
-        // El logo remoto del estado vacío se mantiene a propósito
-        $this->assertStringContainsString('https://latrillacultural.com', $csp);
+        // Los assets son locales: no debe quedar ninguna dependencia remota
+        $this->assertStringNotContainsString('https://latrillacultural.com', $csp);
+        $this->assertStringContainsString("img-src 'self' data:", $csp);
     }
 
     public function testQueueIndexesExist(): void
