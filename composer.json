@@ -5,10 +5,13 @@
     "license": "proprietary",
     "require": {
         "php": "^8.4",
+        "ext-json": "*",
+        "ext-mbstring": "*",
         "ext-pdo": "*",
-        "ext-json": "*"
+        "ext-pdo_mysql": "*"
     },
     "require-dev": {
+        "ext-curl": "*",
         "phpunit/phpunit": "^13.2"
     },
     "autoload-dev": {

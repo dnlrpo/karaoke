@@ -817,7 +817,6 @@ riesgos de operación, hardening o mantenimiento.
 | Tema | Detalle | Recomendación |
 |---|---|---|
 | Rate limit de validación por IP | 10 fallos/15 min por IP; detrás de NAT puede bloquear a todo el local y es un DoS fácil. | Límite por sesión más bajo + umbral de IP más alto, o backoff. |
-| Extensiones PHP no declaradas | Falta `ext-pdo_mysql` y `ext-mbstring`; `ext-curl` solo se usa en tests. | Añadirlas a `composer.json` y a la documentación. |
 | Reacciones solo por sesión | Se puede saltar el límite rotando cookies. | Añadir límite por IP o por participante. |
 | `health` con BD caída | `app/db.php` hace `die()` antes de enrutar; el `try/catch` de `health` no cubre el fallo de conexión y la respuesta no es JSON. | Bootstrap que no muera o respuesta JSON 503. |
 
@@ -837,8 +836,6 @@ riesgos de operación, hardening o mantenimiento.
   `expose_php=Off`.
 - No hay purga de `participants` ni de canciones `deleted`.
 - El CI no compila Tailwind; se puede desplegar CSS desactualizado con CI verde.
-- `.phpunit.cache/test-results` está versionado pese a estar en `.gitignore`;
-  cada ejecución de tests ensucia el working tree. Sacarlo del índice.
 - Los botones de validar/añadir no se deshabilitan durante el fetch; doble clic
   puede duplicar altas.
 - El modal de login no tiene focus trap ni `aria-modal`.
