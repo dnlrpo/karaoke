@@ -257,7 +257,7 @@ public/assets/js/app.js    Lógica del frontend
 public/assets/js/          SortableJS local
 public/assets/vendor/      Font Awesome local
 public/assets/fonts/       Fuentes locales
-public/assets/img/         Logo local (webp + svg)
+public/assets/img/         Logo local (SVG)
 app/db.php                 PDO, migraciones, sesión, CSRF, rate limits, helpers
 app/src/Participant.php    Identidad anónima de participante
 app/src/QueueOptimizer.php Lógica pura de optimización de cola

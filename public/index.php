@@ -38,7 +38,7 @@ $baseHref = rtrim($basePath, '/') === '' ? '/' : rtrim($basePath, '/') . '/';
         <!-- Header -->
         <header class="flex flex-col md:flex-row justify-between items-center gap-6">
             <div class="flex items-center gap-4">
-                <img src="assets/img/logo-circular.webp" alt="Logo La Trilla"
+                <img src="assets/img/logo-circular.svg" alt="Logo La Trilla"
                     class="w-16 h-16 logo-img">
                 <div>
                     <h1 class="text-3xl font-bold tracking-tight text-[#ce2b47]">Karaoke <span class="text-[#329bac]">La Trilla</span>
@@ -222,7 +222,7 @@ $baseHref = rtrim($basePath, '/') === '' ? '/' : rtrim($basePath, '/') . '/';
         class="fixed inset-0 bg-black/90 backdrop-blur-md hidden items-center justify-center z-[100] p-4">
         <div
             class="glass-card p-10 w-full max-w-sm border-[#329bac]/50 shadow-[0_0_50px_rgba(50,155,172,0.2)] text-center">
-            <img src="assets/img/logo-circular.webp" class="w-20 h-20 mx-auto mb-6 opacity-80"
+            <img src="assets/img/logo-circular.svg" class="w-20 h-20 mx-auto mb-6 opacity-80"
                 alt="Logo">
             <h3 class="text-2xl font-bold mb-2 text-[#ce2b47] title-font">Acceso Staff</h3>
             <p class="text-slate-400 text-sm mb-8 MontserratLight">Uso exclusivo del personal</p>
